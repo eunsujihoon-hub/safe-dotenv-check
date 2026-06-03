@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 - 2026-06-03
+
+- normalize the published CLI bin path for npm package metadata
+
 ## 0.2.0 - 2026-06-03
 
 - add a reusable GitHub Action wrapper with step summary output
