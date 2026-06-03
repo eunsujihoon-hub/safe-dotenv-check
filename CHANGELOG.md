@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 - 2026-06-03
+
+- add a reusable GitHub Action wrapper with step summary output
+- add an action smoke test workflow
+- add publish safety checks via `prepublishOnly` and `npm pack --dry-run`
+- include `action.yml` in the published package
+
 ## 0.1.0 - 2026-06-03
 
 - initial CLI release

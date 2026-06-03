@@ -6,6 +6,7 @@ Thanks for contributing to `safe-dotenv-check`.
 
 ```bash
 npm test
+npm run pack:check
 ```
 
 Keep changes small and focused. If you add behavior, add or update tests in `test/check.test.js`.

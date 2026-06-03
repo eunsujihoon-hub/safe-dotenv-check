@@ -1,0 +1,27 @@
+name: action-smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create sample env files
+        run: |
+          cat <<'EOF' > .env.example
+          DATABASE_URL=
+          ?SENTRY_DSN=
+          EOF
+
+          cat <<'EOF' > .env.ci
+          DATABASE_URL=postgres://localhost/app
+          EOF
+      - uses: ./
+        with:
+          example: .env.example
+          env_files: .env.ci

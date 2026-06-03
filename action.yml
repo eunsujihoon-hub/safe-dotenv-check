@@ -1,0 +1,93 @@
+name: safe-dotenv-check
+description: Validate one or more .env files against a .env.example-style manifest.
+
+inputs:
+  example:
+    description: Path to the manifest file, usually .env.example.
+    required: true
+  env_files:
+    description: Newline-separated target .env file paths to validate.
+    required: true
+  allow_extra:
+    description: Set to true to ignore keys that exist only in target env files.
+    required: false
+    default: "false"
+  summary:
+    description: Set to true to write a markdown summary to the GitHub Actions step summary.
+    required: false
+    default: "true"
+  json_output_path:
+    description: Optional path where the JSON report should be copied.
+    required: false
+    default: ""
+
+outputs:
+  ok:
+    description: Whether all target files passed validation.
+    value: ${{ steps.validate.outputs.ok }}
+  report_path:
+    description: Path to the generated JSON report inside the runner workspace.
+    value: ${{ steps.validate.outputs.report_path }}
+
+runs:
+  using: composite
+  steps:
+    - id: validate
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        report_path="${RUNNER_TEMP}/safe-dotenv-check-report.json"
+        args=(--example "${{ inputs.example }}")
+
+        while IFS= read -r line; do
+          if [ -n "$line" ]; then
+            args+=(--env "$line")
+          fi
+        done <<'EOF'
+        ${{ inputs.env_files }}
+        EOF
+
+        if [ "${{ inputs.allow_extra }}" = "true" ]; then
+          args+=(--allow-extra)
+        fi
+
+        set +e
+        node "${GITHUB_ACTION_PATH}/bin/safe-dotenv-check.js" "${args[@]}" --format json >"${report_path}"
+        status=$?
+        set -e
+
+        ok=false
+        if [ "${status}" -eq 0 ]; then
+          ok=true
+        fi
+
+        echo "ok=${ok}" >>"${GITHUB_OUTPUT}"
+        echo "report_path=${report_path}" >>"${GITHUB_OUTPUT}"
+
+        if [ -n "${{ inputs.json_output_path }}" ]; then
+          mkdir -p "$(dirname "${{ inputs.json_output_path }}")"
+          cp "${report_path}" "${{ inputs.json_output_path }}"
+        fi
+
+        if [ "${{ inputs.summary }}" = "true" ]; then
+          REPORT_PATH="${report_path}" node <<'EOF' >>"${GITHUB_STEP_SUMMARY}"
+        const fs = require("node:fs");
+        const report = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, "utf8"));
+
+        process.stdout.write("## safe-dotenv-check\n\n");
+        process.stdout.write(`Manifest: \`${report.example}\`\n\n`);
+        process.stdout.write("| File | Status | Missing | Empty | Extra |\n");
+        process.stdout.write("| --- | --- | --- | --- | --- |\n");
+
+        for (const item of report.files) {
+          const status = item.ok ? "PASS" : "FAIL";
+          const missing = item.missing.length ? item.missing.join(", ") : "-";
+          const empty = item.empty.length ? item.empty.join(", ") : "-";
+          const extra = item.extra.length ? item.extra.join(", ") : "-";
+          process.stdout.write(`| \`${item.file}\` | ${status} | ${missing} | ${empty} | ${extra} |\n`);
+        }
+          EOF
+        fi
+
+        exit "${status}"

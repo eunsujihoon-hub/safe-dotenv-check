@@ -1,6 +1,6 @@
 {
   "name": "safe-dotenv-check",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Small CLI to verify .env files against a required key manifest.",
   "type": "module",
   "homepage": "https://github.com/eunsujihoon-hub/safe-dotenv-check#readme",
@@ -16,10 +16,13 @@
   },
   "files": [
     "bin",
-    "src"
+    "src",
+    "action.yml"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm test && npm run pack:check"
   },
   "keywords": [
     "dotenv",
@@ -30,6 +33,9 @@
   ],
   "author": "eunsujihoon-hub",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   }

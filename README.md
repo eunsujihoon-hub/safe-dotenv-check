@@ -12,6 +12,7 @@ It focuses on the checks that usually break deploys:
 - unexpected extra keys
 - optional keys documented directly inside the example manifest
 - machine-readable JSON output for CI or deployment checks
+- a reusable GitHub Action wrapper for repository-level checks
 
 ## Install
 
@@ -24,6 +25,32 @@ Or run it without installing:
 ```bash
 npx safe-dotenv-check --example .env.example --env .env
 ```
+
+## GitHub Action
+
+Use the repository directly in GitHub Actions:
+
+```yaml
+jobs:
+  env-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: eunsujihoon-hub/safe-dotenv-check@v0.2.0
+        with:
+          example: .env.example
+          env_files: |
+            .env.ci
+            .env.production
+```
+
+Available inputs:
+
+- `example`: manifest path such as `.env.example`
+- `env_files`: newline-separated target env file paths
+- `allow_extra`: set to `true` to ignore keys that exist only in target files
+- `summary`: set to `false` to skip step summary output
+- `json_output_path`: optional path where the JSON report should be copied
 
 ## Usage
 
@@ -130,4 +157,5 @@ Bug reports and pull requests are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.
 
 ```bash
 npm test
+npm run pack:check
 ```
