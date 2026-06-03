@@ -8,11 +8,13 @@ Usage:
   safe-dotenv-check --example .env.example --env .env
   safe-dotenv-check --example .env.example --env .env --env .env.production
   safe-dotenv-check --example .env.example --env .env --allow-extra
+  safe-dotenv-check --example .env.example --env .env --format json
 
 Options:
   --example <path>    Required manifest file, usually .env.example
   --env <path>        Target .env file to verify, repeatable
   --allow-extra       Ignore keys that exist only in target files
+  --format <type>     Output format: text or json
   --help              Show this message
 `;
 
@@ -33,23 +35,41 @@ export function runCli(argv, stdout, stderr) {
   try {
     const exampleEntries = loadEnvFile(parsed.examplePath);
     let allOk = true;
+    const reports = [];
 
     for (const envPath of parsed.envPaths) {
       const targetEntries = loadEnvFile(envPath);
       const result = compareEnv(exampleEntries, targetEntries, {
         allowExtra: parsed.allowExtra
       });
+      reports.push({
+        file: envPath,
+        ...result
+      });
 
-      if (result.ok) {
-        stdout.write(`PASS ${envPath}\n`);
-        continue;
+      if (!result.ok) {
+        allOk = false;
       }
+    }
 
-      allOk = false;
-      stdout.write(`FAIL ${envPath}\n`);
-      writeList(stdout, "missing", result.missing);
-      writeList(stdout, "empty", result.empty);
-      writeList(stdout, "extra", result.extra);
+    if (parsed.format === "json") {
+      stdout.write(`${JSON.stringify({
+        ok: allOk,
+        example: parsed.examplePath,
+        files: reports
+      }, null, 2)}\n`);
+    } else {
+      for (const report of reports) {
+        if (report.ok) {
+          stdout.write(`PASS ${report.file}\n`);
+          continue;
+        }
+
+        stdout.write(`FAIL ${report.file}\n`);
+        writeList(stdout, "missing", report.missing);
+        writeList(stdout, "empty", report.empty);
+        writeList(stdout, "extra", report.extra);
+      }
     }
 
     return allOk ? 0 : 1;
@@ -63,6 +83,7 @@ function parseArgs(argv) {
   const envPaths = [];
   let examplePath = "";
   let allowExtra = false;
+  let format = "text";
   let help = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -75,6 +96,12 @@ function parseArgs(argv) {
 
     if (arg === "--allow-extra") {
       allowExtra = true;
+      continue;
+    }
+
+    if (arg === "--format") {
+      format = argv[index + 1] ?? "";
+      index += 1;
       continue;
     }
 
@@ -103,6 +130,10 @@ function parseArgs(argv) {
       return { error: "at least one --env is required" };
     }
 
+    if (!["text", "json"].includes(format)) {
+      return { error: "--format must be either text or json" };
+    }
+
     const filePaths = [examplePath, ...envPaths];
     for (const filePath of filePaths) {
       if (!filePath) {
@@ -120,6 +151,7 @@ function parseArgs(argv) {
     allowExtra,
     envPaths,
     examplePath,
+    format,
     help
   };
 }

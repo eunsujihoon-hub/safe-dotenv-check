@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compareEnv, parseEnvFile } from "../src/check.js";
+import { runCli } from "../src/cli.js";
 
 test("parseEnvFile ignores comments and export prefixes", () => {
   const entries = parseEnvFile(`
@@ -45,4 +46,43 @@ test("compareEnv can ignore extra keys", () => {
     extra: [],
     ok: true
   });
+});
+
+test("runCli supports json output", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const envPath = path.join(tempDir, ".env");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(envPath, "OTHER_KEY=1\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--example", examplePath, "--env", envPath, "--format", "json"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 1);
+  assert.equal(stderr, "");
+  assert.deepEqual(JSON.parse(stdout), {
+    ok: false,
+    example: examplePath,
+    files: [
+      {
+        file: envPath,
+        missing: ["API_KEY"],
+        empty: [],
+        extra: ["OTHER_KEY"],
+        ok: false
+      }
+    ]
+  });
+
+  await fs.rm(tempDir, { recursive: true, force: true });
 });

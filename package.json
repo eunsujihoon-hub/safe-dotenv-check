@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Small CLI to verify .env files against a required key manifest.",
   "type": "module",
+  "homepage": "https://github.com/eunsujihoon-hub/safe-dotenv-check#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eunsujihoon-hub/safe-dotenv-check.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eunsujihoon-hub/safe-dotenv-check/issues"
+  },
   "bin": {
     "safe-dotenv-check": "./bin/safe-dotenv-check.js"
   },
@@ -20,6 +28,7 @@
     "validation",
     "developer-tools"
   ],
+  "author": "eunsujihoon-hub",
   "license": "MIT",
   "engines": {
     "node": ">=18"
