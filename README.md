@@ -92,6 +92,19 @@ safe-dotenv-check --example .env.example --env .env --format json
 
 Many teams keep `.env.example` around but do not actually verify deploy-time env files against it. This tool is intentionally small enough to drop into CI, pre-deploy scripts, or local sanity checks.
 
+## Secret safety
+
+This repository ignores common secret-bearing files by default:
+
+- `.env`
+- `.env.local`
+- `.env.production.local`
+- `.envrc`
+- `secrets/`
+- certificate and private key files such as `*.pem` and `*.key`
+
+Commit only redacted examples such as `.env.example`. Do not commit real credentials just because the tool checks them.
+
 ## Roadmap
 
 - optional support for warning-only keys
