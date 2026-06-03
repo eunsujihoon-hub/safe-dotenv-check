@@ -1,0 +1,27 @@
+{
+  "name": "safe-dotenv-check",
+  "version": "0.1.0",
+  "description": "Small CLI to verify .env files against a required key manifest.",
+  "type": "module",
+  "bin": {
+    "safe-dotenv-check": "./bin/safe-dotenv-check.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "dotenv",
+    "env",
+    "cli",
+    "validation",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
