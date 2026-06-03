@@ -16,6 +16,20 @@ FLAG
   assert.equal(entries.get("FLAG"), "");
 });
 
+test("parseEnvFile treats inline comments as empty when no value is set", () => {
+  const entries = parseEnvFile(`
+API_KEY= # comment
+EMPTY_QUOTED="" # still empty
+PASSWORD="abc#123" # keep quoted hash
+URL=https://example.com/#fragment
+`);
+
+  assert.equal(entries.get("API_KEY"), "");
+  assert.equal(entries.get("EMPTY_QUOTED"), "");
+  assert.equal(entries.get("PASSWORD"), "abc#123");
+  assert.equal(entries.get("URL"), "https://example.com/#fragment");
+});
+
 test("compareEnv reports missing empty and extra keys", () => {
   const exampleEntries = parseExampleFile(`
 DATABASE_URL=
@@ -75,6 +89,19 @@ REDIS_URL= # optional
     extra: [],
     optional: ["REDIS_URL", "SENTRY_DSN"],
     ok: true
+  });
+});
+
+test("compareEnv fails when a required key only has an inline comment", () => {
+  const exampleEntries = parseExampleFile("API_KEY=\n");
+  const targetEntries = parseEnvFile("API_KEY= # comment\n");
+
+  assert.deepEqual(compareEnv(exampleEntries, targetEntries), {
+    missing: [],
+    empty: ["API_KEY"],
+    extra: [],
+    optional: [],
+    ok: false
   });
 });
 

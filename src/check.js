@@ -20,7 +20,7 @@ export function parseEnvFile(content) {
     }
 
     const value = separatorIndex === -1 ? "" : withoutExport.slice(separatorIndex + 1).trim();
-    entries.set(key, stripWrappingQuotes(value));
+    entries.set(key, normalizeValue(value));
   }
 
   return entries;
@@ -53,7 +53,7 @@ export function parseExampleFile(content) {
 
     const value = separatorIndex === -1 ? "" : normalizedLine.slice(separatorIndex + 1).trim();
     const targetMap = optional ? optionalEntries : requiredEntries;
-    targetMap.set(key, stripWrappingQuotes(value));
+    targetMap.set(key, normalizeValue(value));
   }
 
   return {
@@ -69,6 +69,49 @@ function stripWrappingQuotes(value) {
     const last = value[value.length - 1];
     if ((first === "\"" && last === "\"") || (first === "'" && last === "'")) {
       return value.slice(1, -1);
+    }
+  }
+
+  return value;
+}
+
+function normalizeValue(value) {
+  return stripWrappingQuotes(stripInlineComment(value).trim());
+}
+
+function stripInlineComment(value) {
+  let quote = "";
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = "";
+      }
+      continue;
+    }
+
+    if (char === "\"" || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "#") {
+      if (index === 0 || /\s/.test(value[index - 1])) {
+        return value.slice(0, index);
+      }
     }
   }
 

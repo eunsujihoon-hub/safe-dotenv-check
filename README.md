@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: eunsujihoon-hub/safe-dotenv-check@v0.2.0
+      - uses: eunsujihoon-hub/safe-dotenv-check@v0.2.2
         with:
           example: .env.example
           env_files: |
@@ -64,7 +64,7 @@ safe-dotenv-check --example .env.example --env .env --format json
 ## Exit codes
 
 - `0`: all files passed
-- `1`: at least one file has missing or empty required keys
+- `1`: at least one file has missing or empty required keys, or unexpected extra keys when `--allow-extra` is not set
 - `2`: invalid CLI usage or unreadable files
 
 ## What counts as required
@@ -88,6 +88,8 @@ Optional keys can be marked in either of these forms:
 ?SENTRY_DSN=
 REDIS_URL= # optional
 ```
+
+Inline comments after an unquoted value are ignored, so `API_KEY= # comment` is treated as empty.
 
 ## Output example
 

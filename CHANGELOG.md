@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 - 2026-06-03
+
+- fix inline comment parsing so `KEY= # comment` is treated as an empty value
+- add regression tests for empty inline-comment values and quoted hash values
+- clarify README exit code behavior for unexpected extra keys
+
 ## 0.2.1 - 2026-06-03
 
 - normalize the published CLI bin path for npm package metadata
