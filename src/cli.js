@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { compareEnv, loadEnvFile } from "./check.js";
+import { compareEnv, loadEnvFile, loadExampleFile } from "./check.js";
 
 const HELP_TEXT = `safe-dotenv-check
 
@@ -16,6 +16,10 @@ Options:
   --allow-extra       Ignore keys that exist only in target files
   --format <type>     Output format: text or json
   --help              Show this message
+
+Example optional keys:
+  ?SENTRY_DSN=
+  REDIS_URL= # optional
 `;
 
 export function runCli(argv, stdout, stderr) {
@@ -33,7 +37,7 @@ export function runCli(argv, stdout, stderr) {
   }
 
   try {
-    const exampleEntries = loadEnvFile(parsed.examplePath);
+    const exampleEntries = loadExampleFile(parsed.examplePath);
     let allOk = true;
     const reports = [];
 
@@ -69,6 +73,7 @@ export function runCli(argv, stdout, stderr) {
         writeList(stdout, "missing", report.missing);
         writeList(stdout, "empty", report.empty);
         writeList(stdout, "extra", report.extra);
+        writeList(stdout, "optional", report.optional);
       }
     }
 

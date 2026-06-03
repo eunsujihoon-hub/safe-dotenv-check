@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compareEnv, parseEnvFile } from "../src/check.js";
+import { compareEnv, parseEnvFile, parseExampleFile } from "../src/check.js";
 import { runCli } from "../src/cli.js";
 
 test("parseEnvFile ignores comments and export prefixes", () => {
@@ -17,7 +17,7 @@ FLAG
 });
 
 test("compareEnv reports missing empty and extra keys", () => {
-  const exampleEntries = parseEnvFile(`
+  const exampleEntries = parseExampleFile(`
 DATABASE_URL=
 OPENAI_API_KEY=
 LOG_LEVEL=info
@@ -32,18 +32,48 @@ DEBUG=true
     missing: ["OPENAI_API_KEY"],
     empty: ["DATABASE_URL"],
     extra: ["DEBUG"],
+    optional: [],
     ok: false
   });
 });
 
 test("compareEnv can ignore extra keys", () => {
-  const exampleEntries = parseEnvFile("A=\n");
+  const exampleEntries = parseExampleFile("A=\n");
   const targetEntries = parseEnvFile("A=1\nB=2\n");
 
   assert.deepEqual(compareEnv(exampleEntries, targetEntries, { allowExtra: true }), {
     missing: [],
     empty: [],
     extra: [],
+    optional: [],
+    ok: true
+  });
+});
+
+test("parseExampleFile supports optional keys", () => {
+  const example = parseExampleFile(`
+DATABASE_URL=
+?SENTRY_DSN=
+REDIS_URL= # optional
+`);
+
+  assert.deepEqual([...example.requiredEntries.keys()], ["DATABASE_URL"]);
+  assert.deepEqual([...example.optionalEntries.keys()].sort(), ["REDIS_URL", "SENTRY_DSN"]);
+});
+
+test("compareEnv does not fail on missing optional keys", () => {
+  const exampleEntries = parseExampleFile(`
+DATABASE_URL=
+?SENTRY_DSN=
+REDIS_URL= # optional
+`);
+  const targetEntries = parseEnvFile("DATABASE_URL=postgres://local\n");
+
+  assert.deepEqual(compareEnv(exampleEntries, targetEntries), {
+    missing: [],
+    empty: [],
+    extra: [],
+    optional: ["REDIS_URL", "SENTRY_DSN"],
     ok: true
   });
 });
@@ -79,6 +109,7 @@ test("runCli supports json output", async () => {
         missing: ["API_KEY"],
         empty: [],
         extra: ["OTHER_KEY"],
+        optional: [],
         ok: false
       }
     ]

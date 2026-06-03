@@ -10,6 +10,7 @@ It focuses on the checks that usually break deploys:
 - missing required keys
 - empty values for required keys
 - unexpected extra keys
+- optional keys documented directly inside the example manifest
 - machine-readable JSON output for CI or deployment checks
 
 ## Install
@@ -50,6 +51,15 @@ Example:
 DATABASE_URL=
 OPENAI_API_KEY=
 LOG_LEVEL=info
+?SENTRY_DSN=
+REDIS_URL= # optional
+```
+
+Optional keys can be marked in either of these forms:
+
+```dotenv
+?SENTRY_DSN=
+REDIS_URL= # optional
 ```
 
 ## Output example
@@ -82,6 +92,7 @@ safe-dotenv-check --example .env.example --env .env --format json
         "DATABASE_URL"
       ],
       "extra": [],
+      "optional": [],
       "ok": false
     }
   ]

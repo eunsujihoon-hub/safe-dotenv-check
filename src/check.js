@@ -26,6 +26,43 @@ export function parseEnvFile(content) {
   return entries;
 }
 
+export function parseExampleFile(content) {
+  const requiredEntries = new Map();
+  const optionalEntries = new Map();
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const withoutExport = line.startsWith("export ") ? line.slice(7) : line;
+    const optional = /(^\?[\w.-]+\s*=)|(\s+#\s*optional\s*$)/i.test(withoutExport);
+    const normalizedLine = withoutExport
+      .replace(/^\?/, "")
+      .replace(/\s+#\s*optional\s*$/i, "");
+
+    const separatorIndex = normalizedLine.indexOf("=");
+    const key = separatorIndex === -1
+      ? normalizedLine.trim()
+      : normalizedLine.slice(0, separatorIndex).trim();
+
+    if (!key) {
+      continue;
+    }
+
+    const value = separatorIndex === -1 ? "" : normalizedLine.slice(separatorIndex + 1).trim();
+    const targetMap = optional ? optionalEntries : requiredEntries;
+    targetMap.set(key, stripWrappingQuotes(value));
+  }
+
+  return {
+    requiredEntries,
+    optionalEntries,
+    allEntries: new Map([...requiredEntries, ...optionalEntries])
+  };
+}
+
 function stripWrappingQuotes(value) {
   if (value.length >= 2) {
     const first = value[0];
@@ -42,11 +79,17 @@ export function loadEnvFile(filePath) {
   return parseEnvFile(fs.readFileSync(filePath, "utf8"));
 }
 
+export function loadExampleFile(filePath) {
+  return parseExampleFile(fs.readFileSync(filePath, "utf8"));
+}
+
 export function compareEnv(exampleEntries, targetEntries, options = {}) {
-  const requiredKeys = [...exampleEntries.keys()];
+  const exampleSpec = normalizeExampleSpec(exampleEntries);
+  const requiredKeys = [...exampleSpec.requiredEntries.keys()];
   const targetKeys = new Set(targetEntries.keys());
   const missing = [];
   const empty = [];
+  const optional = [...exampleSpec.optionalEntries.keys()].sort();
 
   for (const key of requiredKeys) {
     if (!targetKeys.has(key)) {
@@ -61,12 +104,25 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
 
   const extra = options.allowExtra
     ? []
-    : [...targetKeys].filter((key) => !exampleEntries.has(key)).sort();
+    : [...targetKeys].filter((key) => !exampleSpec.allEntries.has(key)).sort();
 
   return {
     missing,
     empty,
     extra,
+    optional,
     ok: missing.length === 0 && empty.length === 0 && extra.length === 0
+  };
+}
+
+function normalizeExampleSpec(exampleEntries) {
+  if (exampleEntries?.requiredEntries && exampleEntries?.optionalEntries && exampleEntries?.allEntries) {
+    return exampleEntries;
+  }
+
+  return {
+    requiredEntries: exampleEntries,
+    optionalEntries: new Map(),
+    allEntries: exampleEntries
   };
 }
