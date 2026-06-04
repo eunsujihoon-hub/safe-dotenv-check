@@ -1,7 +1,7 @@
 {
   "name": "safe-dotenv-check",
   "version": "1.1.0",
-  "description": "Contract-first CLI to validate env files against a deploy-focused manifest with schema rules and severity tiers.",
+  "description": "A small, stable CLI for manifest-based environment contract checks in local, CI, and deploy workflows.",
   "type": "module",
   "homepage": "https://github.com/eunsujihoon-hub/safe-dotenv-check#readme",
   "repository": {

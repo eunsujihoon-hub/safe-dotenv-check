@@ -12,7 +12,7 @@ Most of the time the failure was not dramatic. It was small stuff that wasted ti
 - an integration that should be there, but should not block release
 - a value that exists, but is obviously the wrong shape
 
-I did not want a big config framework for that. I wanted something small enough to run locally or in CI, but strict enough to catch the annoying stuff before it turned into a deploy chase.
+I did not want a big config framework for that. I wanted something small and stable enough to run locally or in CI, but strict enough to catch the annoying stuff before it turned into a deploy chase.
 
 That is what `safe-dotenv-check` is for. It checks a manifest such as `.env.example` against one or more target `.env` files and focuses on the things that usually matter when you are actually shipping:
 
@@ -25,7 +25,7 @@ That is what `safe-dotenv-check` is for. It checks a manifest such as `.env.exam
 - machine-readable JSON output for CI or deployment checks
 - a reusable GitHub Action wrapper for repository-level checks
 
-The whole point is to stop `.env.example` from turning into documentation theater and make it useful as a lightweight env contract for local development, CI, and deploy-time checks.
+The whole point is to stop `.env.example` from turning into documentation theater and make it useful as a small, stable env contract for local development, CI, and deploy-time checks.
 
 ## Feature overview
 
