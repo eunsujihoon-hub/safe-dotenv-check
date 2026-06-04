@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0 - 2026-06-04
+
+- add contract-style schema validation with `type=`, `enum=`, and `pattern=` manifest directives
+- validate optional keys when present and non-empty, while keeping warning-only invalid values non-blocking
+- include invalid and warn-invalid findings in CLI text output, JSON output, and GitHub Action summaries
+- reposition the project around env contracts for local, CI, and deploy-time checks
+
 ## 0.3.0 - 2026-06-04
 
 - add warning-only manifest keys via `!KEY=` or `KEY= # warn`

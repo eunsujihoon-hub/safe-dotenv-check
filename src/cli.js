@@ -24,6 +24,12 @@ Example optional keys:
 Example warning-only keys:
   !SLACK_WEBHOOK_URL=
   OTEL_EXPORTER_OTLP_ENDPOINT= # warn
+
+Example schema rules:
+  PORT=3000 # type=int
+  APP_URL=https://example.com # type=url
+  NODE_ENV=development # enum=development|staging|production
+  FEATURE_FLAGS={} # type=json optional
 `;
 
 export function runCli(argv, stdout, stderr) {
@@ -68,7 +74,7 @@ export function runCli(argv, stdout, stderr) {
       }, null, 2)}\n`);
     } else {
       for (const report of reports) {
-        const hasWarnings = report.warnMissing.length > 0 || report.warnEmpty.length > 0;
+        const hasWarnings = report.warnMissing.length > 0 || report.warnEmpty.length > 0 || report.warnInvalid.length > 0;
 
         if (report.ok && !hasWarnings) {
           stdout.write(`PASS ${report.file}\n`);
@@ -79,17 +85,20 @@ export function runCli(argv, stdout, stderr) {
           stdout.write(`WARN ${report.file}\n`);
           writeList(stdout, "warn-missing", report.warnMissing);
           writeList(stdout, "warn-empty", report.warnEmpty);
+          writeInvalidList(stdout, "warn-invalid", report.warnInvalid);
           continue;
         }
 
         stdout.write(`FAIL ${report.file}\n`);
         writeList(stdout, "missing", report.missing);
         writeList(stdout, "empty", report.empty);
+        writeInvalidList(stdout, "invalid", report.invalid);
         writeList(stdout, "extra", report.extra);
         writeList(stdout, "optional", report.optional);
         writeList(stdout, "warning", report.warning);
         writeList(stdout, "warn-missing", report.warnMissing);
         writeList(stdout, "warn-empty", report.warnEmpty);
+        writeInvalidList(stdout, "warn-invalid", report.warnInvalid);
       }
     }
 
@@ -180,5 +189,12 @@ function parseArgs(argv) {
 function writeList(stdout, label, values) {
   if (values.length > 0) {
     stdout.write(`  ${label}: ${values.join(", ")}\n`);
+  }
+}
+
+function writeInvalidList(stdout, label, values) {
+  if (values.length > 0) {
+    const formatted = values.map((item) => `${item.key} (${item.expected})`).join(", ");
+    stdout.write(`  ${label}: ${formatted}\n`);
   }
 }

@@ -3,7 +3,7 @@
 [![CI](https://github.com/eunsujihoon-hub/safe-dotenv-check/actions/workflows/ci.yml/badge.svg)](https://github.com/eunsujihoon-hub/safe-dotenv-check/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-Small CLI to compare environment keys from a manifest file such as `.env.example` against one or more target `.env` files.
+A contract-first CLI to compare environment keys from a manifest file such as `.env.example` against one or more target `.env` files.
 
 It focuses on the checks that usually matter during deploys:
 
@@ -11,9 +11,12 @@ It focuses on the checks that usually matter during deploys:
 - optional keys that are documented but not enforced
 - warning-only keys that should exist but should not block deploys
 - empty values for required keys
+- schema validation for typed values such as integers, URLs, booleans, JSON, enums, and regex patterns
 - unexpected extra keys
 - machine-readable JSON output for CI or deployment checks
 - a reusable GitHub Action wrapper for repository-level checks
+
+This turns a loose `.env.example` file into a lightweight env contract for local development, CI, and deployment workflows.
 
 ## Install
 
@@ -37,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: eunsujihoon-hub/safe-dotenv-check@v0.2.2
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.0.0
         with:
           example: .env.example
           env_files: |
@@ -105,6 +108,47 @@ OTEL_EXPORTER_OTLP_ENDPOINT= # warn
 
 Inline comments after an unquoted value are ignored, so `API_KEY= # comment` is treated as empty.
 
+## Schema rules
+
+You can attach schema directives in the inline comment area of each manifest entry:
+
+```dotenv
+PORT=3000 # type=int
+APP_URL=https://example.com # type=url
+NODE_ENV=development # enum=development|staging|production
+FEATURE_FLAGS={} # type=json optional
+API_KEY= # pattern=^sk-[a-z0-9]+$
+```
+
+Supported directives:
+
+- `type=string`
+- `type=int`
+- `type=number`
+- `type=boolean`
+- `type=url`
+- `type=json`
+- `enum=value1|value2|value3`
+- `pattern=<regex>`
+
+Rule behavior:
+
+- missing required keys still fail before schema validation
+- empty required keys still fail as empty values
+- optional keys are validated only when present and non-empty
+- warning-only keys report invalid values as warnings instead of failures
+- `type`, `enum`, and `pattern` can be combined on the same key
+
+Example:
+
+```dotenv
+DATABASE_URL=postgres://localhost/app # type=url
+PORT=3000 # type=int
+NODE_ENV=development # enum=development|test|production
+FEATURE_FLAGS={"beta":false} # type=json optional
+!OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.example.com # type=url
+```
+
 ## Output example
 
 ```text
@@ -112,10 +156,12 @@ PASS .env
 FAIL .env.production
   missing: OPENAI_API_KEY
   empty: DATABASE_URL
+  invalid: PORT (type=int), NODE_ENV (enum=development|staging|production)
   extra: DEBUG
 WARN .env.staging
   warn-missing: SLACK_WEBHOOK_URL
   warn-empty: OTEL_EXPORTER_OTLP_ENDPOINT
+  warn-invalid: OTEL_EXPORTER_OTLP_ENDPOINT (type=url)
 ```
 
 ## JSON output
@@ -137,6 +183,13 @@ safe-dotenv-check --example .env.example --env .env --format json
       "empty": [
         "DATABASE_URL"
       ],
+      "invalid": [
+        {
+          "key": "PORT",
+          "value": "abc",
+          "expected": "type=int"
+        }
+      ],
       "extra": [],
       "optional": [],
       "warning": [
@@ -146,6 +199,7 @@ safe-dotenv-check --example .env.example --env .env --format json
         "SLACK_WEBHOOK_URL"
       ],
       "warnEmpty": [],
+      "warnInvalid": [],
       "ok": false
     }
   ]
@@ -154,7 +208,7 @@ safe-dotenv-check --example .env.example --env .env --format json
 
 ## Why this exists
 
-Many teams keep `.env.example` around but do not actually verify deploy-time env files against it, or they need more nuance than just pass or fail. This tool is intentionally small enough to drop into CI, pre-deploy scripts, or local sanity checks while still letting one manifest describe hard requirements, optional keys, and recommended integrations.
+Many teams keep `.env.example` around but do not actually verify deploy-time env files against it, or they need more nuance than just pass or fail. This tool is intentionally small enough to drop into CI, pre-deploy scripts, or local sanity checks while still letting one manifest describe hard requirements, optional keys, recommended integrations, and typed value expectations.
 
 ## Secret safety
 
@@ -171,9 +225,9 @@ Commit only redacted examples such as `.env.example`. Do not commit real credent
 
 ## Roadmap
 
-- shell-friendly summary mode
-- severity customization for extra keys
-- config file support for shared project defaults
+- multi-environment contract files for `dev`, `staging`, and `prod`
+- platform adapters for GitHub Actions secrets and hosted deploy platforms
+- generated env reference docs from the manifest
 
 ## Contributing
 
