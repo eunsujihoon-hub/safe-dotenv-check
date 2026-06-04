@@ -20,6 +20,10 @@ Options:
 Example optional keys:
   ?SENTRY_DSN=
   REDIS_URL= # optional
+
+Example warning-only keys:
+  !SLACK_WEBHOOK_URL=
+  OTEL_EXPORTER_OTLP_ENDPOINT= # warn
 `;
 
 export function runCli(argv, stdout, stderr) {
@@ -64,8 +68,17 @@ export function runCli(argv, stdout, stderr) {
       }, null, 2)}\n`);
     } else {
       for (const report of reports) {
-        if (report.ok) {
+        const hasWarnings = report.warnMissing.length > 0 || report.warnEmpty.length > 0;
+
+        if (report.ok && !hasWarnings) {
           stdout.write(`PASS ${report.file}\n`);
+          continue;
+        }
+
+        if (report.ok) {
+          stdout.write(`WARN ${report.file}\n`);
+          writeList(stdout, "warn-missing", report.warnMissing);
+          writeList(stdout, "warn-empty", report.warnEmpty);
           continue;
         }
 
@@ -74,6 +87,9 @@ export function runCli(argv, stdout, stderr) {
         writeList(stdout, "empty", report.empty);
         writeList(stdout, "extra", report.extra);
         writeList(stdout, "optional", report.optional);
+        writeList(stdout, "warning", report.warning);
+        writeList(stdout, "warn-missing", report.warnMissing);
+        writeList(stdout, "warn-empty", report.warnEmpty);
       }
     }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 - 2026-06-04
+
+- add warning-only manifest keys via `!KEY=` or `KEY= # warn`
+- report warning-only missing or empty values without failing the CLI exit code
+- document the new deploy-focused manifest tiers in README examples
+
 ## 0.2.2 - 2026-06-03
 
 - fix inline comment parsing so `KEY= # comment` is treated as an empty value

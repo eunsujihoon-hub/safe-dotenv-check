@@ -29,6 +29,7 @@ export function parseEnvFile(content) {
 export function parseExampleFile(content) {
   const requiredEntries = new Map();
   const optionalEntries = new Map();
+  const warningEntries = new Map();
 
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -38,8 +39,11 @@ export function parseExampleFile(content) {
 
     const withoutExport = line.startsWith("export ") ? line.slice(7) : line;
     const optional = /(^\?[\w.-]+\s*=)|(\s+#\s*optional\s*$)/i.test(withoutExport);
+    const warning = /(^![\w.-]+\s*=)|(\s+#\s*warn(?:ing)?\s*$)/i.test(withoutExport);
     const normalizedLine = withoutExport
       .replace(/^\?/, "")
+      .replace(/^!/, "")
+      .replace(/\s+#\s*warn(?:ing)?\s*$/i, "")
       .replace(/\s+#\s*optional\s*$/i, "");
 
     const separatorIndex = normalizedLine.indexOf("=");
@@ -52,14 +56,19 @@ export function parseExampleFile(content) {
     }
 
     const value = separatorIndex === -1 ? "" : normalizedLine.slice(separatorIndex + 1).trim();
-    const targetMap = optional ? optionalEntries : requiredEntries;
+    const targetMap = optional
+      ? optionalEntries
+      : warning
+        ? warningEntries
+        : requiredEntries;
     targetMap.set(key, normalizeValue(value));
   }
 
   return {
     requiredEntries,
     optionalEntries,
-    allEntries: new Map([...requiredEntries, ...optionalEntries])
+    warningEntries,
+    allEntries: new Map([...requiredEntries, ...optionalEntries, ...warningEntries])
   };
 }
 
@@ -129,10 +138,14 @@ export function loadExampleFile(filePath) {
 export function compareEnv(exampleEntries, targetEntries, options = {}) {
   const exampleSpec = normalizeExampleSpec(exampleEntries);
   const requiredKeys = [...exampleSpec.requiredEntries.keys()];
+  const warningKeys = [...exampleSpec.warningEntries.keys()];
   const targetKeys = new Set(targetEntries.keys());
   const missing = [];
   const empty = [];
   const optional = [...exampleSpec.optionalEntries.keys()].sort();
+  const warning = [...exampleSpec.warningEntries.keys()].sort();
+  const warnMissing = [];
+  const warnEmpty = [];
 
   for (const key of requiredKeys) {
     if (!targetKeys.has(key)) {
@@ -145,6 +158,17 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
     }
   }
 
+  for (const key of warningKeys) {
+    if (!targetKeys.has(key)) {
+      warnMissing.push(key);
+      continue;
+    }
+
+    if (targetEntries.get(key) === "") {
+      warnEmpty.push(key);
+    }
+  }
+
   const extra = options.allowExtra
     ? []
     : [...targetKeys].filter((key) => !exampleSpec.allEntries.has(key)).sort();
@@ -154,18 +178,22 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
     empty,
     extra,
     optional,
+    warning,
+    warnMissing,
+    warnEmpty,
     ok: missing.length === 0 && empty.length === 0 && extra.length === 0
   };
 }
 
 function normalizeExampleSpec(exampleEntries) {
-  if (exampleEntries?.requiredEntries && exampleEntries?.optionalEntries && exampleEntries?.allEntries) {
+  if (exampleEntries?.requiredEntries && exampleEntries?.optionalEntries && exampleEntries?.warningEntries && exampleEntries?.allEntries) {
     return exampleEntries;
   }
 
   return {
     requiredEntries: exampleEntries,
     optionalEntries: new Map(),
+    warningEntries: new Map(),
     allEntries: exampleEntries
   };
 }

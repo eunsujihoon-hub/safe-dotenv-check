@@ -3,14 +3,15 @@
 [![CI](https://github.com/eunsujihoon-hub/safe-dotenv-check/actions/workflows/ci.yml/badge.svg)](https://github.com/eunsujihoon-hub/safe-dotenv-check/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-Small CLI to compare required environment keys from a manifest file such as `.env.example` against one or more target `.env` files.
+Small CLI to compare environment keys from a manifest file such as `.env.example` against one or more target `.env` files.
 
-It focuses on the checks that usually break deploys:
+It focuses on the checks that usually matter during deploys:
 
-- missing required keys
+- required keys that must exist
+- optional keys that are documented but not enforced
+- warning-only keys that should exist but should not block deploys
 - empty values for required keys
 - unexpected extra keys
-- optional keys documented directly inside the example manifest
 - machine-readable JSON output for CI or deployment checks
 - a reusable GitHub Action wrapper for repository-level checks
 
@@ -67,9 +68,13 @@ safe-dotenv-check --example .env.example --env .env --format json
 - `1`: at least one file has missing or empty required keys, or unexpected extra keys when `--allow-extra` is not set
 - `2`: invalid CLI usage or unreadable files
 
-## What counts as required
+## Manifest tiers
 
-Every non-comment key in the example file is treated as required.
+The manifest supports three levels:
+
+- required: must exist and must not be empty
+- optional: documented only, never fails validation
+- warning-only: reported when missing or empty, but does not change the exit code
 
 Example:
 
@@ -80,6 +85,8 @@ OPENAI_API_KEY=
 LOG_LEVEL=info
 ?SENTRY_DSN=
 REDIS_URL= # optional
+!SLACK_WEBHOOK_URL=
+OTEL_EXPORTER_OTLP_ENDPOINT= # warn
 ```
 
 Optional keys can be marked in either of these forms:
@@ -87,6 +94,13 @@ Optional keys can be marked in either of these forms:
 ```dotenv
 ?SENTRY_DSN=
 REDIS_URL= # optional
+```
+
+Warning-only keys can be marked in either of these forms:
+
+```dotenv
+!SLACK_WEBHOOK_URL=
+OTEL_EXPORTER_OTLP_ENDPOINT= # warn
 ```
 
 Inline comments after an unquoted value are ignored, so `API_KEY= # comment` is treated as empty.
@@ -99,6 +113,9 @@ FAIL .env.production
   missing: OPENAI_API_KEY
   empty: DATABASE_URL
   extra: DEBUG
+WARN .env.staging
+  warn-missing: SLACK_WEBHOOK_URL
+  warn-empty: OTEL_EXPORTER_OTLP_ENDPOINT
 ```
 
 ## JSON output
@@ -122,6 +139,13 @@ safe-dotenv-check --example .env.example --env .env --format json
       ],
       "extra": [],
       "optional": [],
+      "warning": [
+        "SLACK_WEBHOOK_URL"
+      ],
+      "warnMissing": [
+        "SLACK_WEBHOOK_URL"
+      ],
+      "warnEmpty": [],
       "ok": false
     }
   ]
@@ -130,7 +154,7 @@ safe-dotenv-check --example .env.example --env .env --format json
 
 ## Why this exists
 
-Many teams keep `.env.example` around but do not actually verify deploy-time env files against it. This tool is intentionally small enough to drop into CI, pre-deploy scripts, or local sanity checks.
+Many teams keep `.env.example` around but do not actually verify deploy-time env files against it, or they need more nuance than just pass or fail. This tool is intentionally small enough to drop into CI, pre-deploy scripts, or local sanity checks while still letting one manifest describe hard requirements, optional keys, and recommended integrations.
 
 ## Secret safety
 
@@ -147,9 +171,9 @@ Commit only redacted examples such as `.env.example`. Do not commit real credent
 
 ## Roadmap
 
-- optional support for warning-only keys
 - shell-friendly summary mode
-- GitHub Action wrapper
+- severity customization for extra keys
+- config file support for shared project defaults
 
 ## Contributing
 

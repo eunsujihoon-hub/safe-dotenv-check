@@ -77,15 +77,18 @@ runs:
 
         process.stdout.write("## safe-dotenv-check\n\n");
         process.stdout.write(`Manifest: \`${report.example}\`\n\n`);
-        process.stdout.write("| File | Status | Missing | Empty | Extra |\n");
-        process.stdout.write("| --- | --- | --- | --- | --- |\n");
+        process.stdout.write("| File | Status | Missing | Empty | Extra | Warn Missing | Warn Empty |\n");
+        process.stdout.write("| --- | --- | --- | --- | --- | --- | --- |\n");
 
         for (const item of report.files) {
-          const status = item.ok ? "PASS" : "FAIL";
+          const hasWarnings = item.warnMissing.length > 0 || item.warnEmpty.length > 0;
+          const status = item.ok ? (hasWarnings ? "WARN" : "PASS") : "FAIL";
           const missing = item.missing.length ? item.missing.join(", ") : "-";
           const empty = item.empty.length ? item.empty.join(", ") : "-";
           const extra = item.extra.length ? item.extra.join(", ") : "-";
-          process.stdout.write(`| \`${item.file}\` | ${status} | ${missing} | ${empty} | ${extra} |\n`);
+          const warnMissing = item.warnMissing.length ? item.warnMissing.join(", ") : "-";
+          const warnEmpty = item.warnEmpty.length ? item.warnEmpty.join(", ") : "-";
+          process.stdout.write(`| \`${item.file}\` | ${status} | ${missing} | ${empty} | ${extra} | ${warnMissing} | ${warnEmpty} |\n`);
         }
           EOF
         fi

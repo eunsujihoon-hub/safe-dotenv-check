@@ -1,7 +1,7 @@
 {
   "name": "safe-dotenv-check",
-  "version": "0.2.2",
-  "description": "Small CLI to verify .env files against a required key manifest.",
+  "version": "0.3.0",
+  "description": "Small CLI to verify .env files against a deploy-focused manifest with required, optional, and warning-only keys.",
   "type": "module",
   "homepage": "https://github.com/eunsujihoon-hub/safe-dotenv-check#readme",
   "repository": {
