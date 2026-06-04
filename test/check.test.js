@@ -122,6 +122,7 @@ test("parseExampleFile supports env-specific entries and descriptions", () => {
 DATABASE_URL=postgres://localhost/app # type=url desc="Shared database connection"
 ?SENTRY_DSN= # env=dev desc=Local error tracking only
 SENTRY_DSN= # env=production desc=Production error tracking DSN
+!DEPLOY_WEBHOOK_URL= # env=staging|production description="Deploy webhook for notifications"
 `);
 
   assert.equal(example.requiredEntries.get("DATABASE_URL").description, "Shared database connection");
@@ -132,6 +133,8 @@ SENTRY_DSN= # env=production desc=Production error tracking DSN
   assert.deepEqual(example.entries[1].envs, ["dev"]);
   assert.equal(example.entries[2].description, "Production error tracking DSN");
   assert.deepEqual(example.entries[2].envs, ["production"]);
+  assert.equal(example.entries[3].description, "Deploy webhook for notifications");
+  assert.deepEqual(example.entries[3].envs, ["staging", "production"]);
 });
 
 test("compareEnv does not fail on missing optional keys", () => {
@@ -235,6 +238,53 @@ OTEL_EXPORTER_OTLP_ENDPOINT=collector
     warnInvalid: [
       { key: "OTEL_EXPORTER_OTLP_ENDPOINT", value: "collector", expected: "type=url" }
     ],
+    ok: false
+  });
+});
+
+test("compareEnv validates remaining built-in schema types", () => {
+  const exampleEntries = parseExampleFile(`
+SERVICE_NAME=api # type=string
+TIMEOUT_SECONDS=1.5 # type=number
+FEATURE_ENABLED=true # type=boolean
+`);
+  const validEntries = parseEnvFile(`
+SERVICE_NAME=
+TIMEOUT_SECONDS=2.75
+FEATURE_ENABLED=on
+`);
+  const invalidEntries = parseEnvFile(`
+SERVICE_NAME=api
+TIMEOUT_SECONDS=abc
+FEATURE_ENABLED=maybe
+`);
+
+  assert.deepEqual(compareEnv(exampleEntries, validEntries), {
+    missing: [],
+    empty: ["SERVICE_NAME"],
+    invalid: [],
+    extra: [],
+    optional: [],
+    warning: [],
+    warnMissing: [],
+    warnEmpty: [],
+    warnInvalid: [],
+    ok: false
+  });
+
+  assert.deepEqual(compareEnv(exampleEntries, invalidEntries), {
+    missing: [],
+    empty: [],
+    invalid: [
+      { key: "TIMEOUT_SECONDS", value: "abc", expected: "type=number" },
+      { key: "FEATURE_ENABLED", value: "maybe", expected: "type=boolean" }
+    ],
+    extra: [],
+    optional: [],
+    warning: [],
+    warnMissing: [],
+    warnEmpty: [],
+    warnInvalid: [],
     ok: false
   });
 });
@@ -366,6 +416,65 @@ test("runCli applies env-specific manifest entries and includes envName in json 
       }
     ]
   });
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli rejects mismatched env-name counts", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const envPath = path.join(tempDir, ".env");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(envPath, "API_KEY=test\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    [
+      "--example", examplePath,
+      "--env", envPath,
+      "--env-name", "dev",
+      "--env-name", "production"
+    ],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 2);
+  assert.equal(stdout, "");
+  assert.match(stderr, /--env-name must be provided once or once per --env/);
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli supports allow-extra for success paths", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const envPath = path.join(tempDir, ".env");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(envPath, "API_KEY=test\nEXTRA_KEY=1\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--example", examplePath, "--env", envPath, "--allow-extra"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(stdout, `PASS ${envPath}\n`);
 
   await fs.rm(tempDir, { recursive: true, force: true });
 });

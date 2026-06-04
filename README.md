@@ -27,6 +27,23 @@ That is what `safe-dotenv-check` is for. It checks a manifest such as `.env.exam
 
 The whole point is to stop `.env.example` from turning into documentation theater and make it useful as a lightweight env contract for local development, CI, and deploy-time checks.
 
+## Feature overview
+
+If you want the short version of what this tool actually does, this is the practical checklist:
+
+- compare one manifest against one or more real env files
+- fail on missing required keys
+- fail on required keys that exist but are effectively empty
+- allow documented optional keys without forcing them everywhere
+- warn on recommended integrations without blocking deploys
+- validate value shape with `type=`, `enum=`, and `pattern=`
+- scope the same key differently across `dev`, `staging`, `production`, or any env name you use
+- keep short descriptions next to each key so the manifest stays readable
+- emit plain terminal output for humans and JSON output for CI or scripts
+- run the same contract through a GitHub Action without duplicating logic
+
+It is intentionally small. The goal is not to replace runtime config libraries. The goal is to catch env drift early enough that you do not burn release time on it.
+
 ## Install
 
 Nothing special here.
@@ -126,6 +143,21 @@ OTEL_EXPORTER_OTLP_ENDPOINT= # warn
 
 Inline comments after an unquoted value are ignored, so `API_KEY= # comment` is treated as empty. That one is in here because it is an easy way for a key to look present while still being effectively blank.
 
+### Tier behavior at a glance
+
+- `required`
+  - missing: fail
+  - empty: fail
+  - invalid by schema: fail
+- `optional`
+  - missing: ignored
+  - empty: ignored
+  - invalid by schema: fail only when the key is present and non-empty
+- `warning-only`
+  - missing: warn
+  - empty: warn
+  - invalid by schema: warn
+
 ## Environment-specific rules
 
 One thing that kept coming up in real projects was that the same key was not always treated the same way everywhere. A key could be optional in local dev, required in production, and irrelevant in CI.
@@ -180,6 +212,15 @@ How the rules behave:
 - warning-only keys report invalid values as warnings instead of failures
 - `type`, `enum`, and `pattern` can be combined on the same key
 
+Supported built-in type checks in plain language:
+
+- `string`: always valid as long as the key exists
+- `int`: whole numbers such as `3000` or `-1`
+- `number`: anything JavaScript can parse as a finite number
+- `boolean`: `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`
+- `url`: must parse as a URL with protocol and host
+- `json`: must parse as valid JSON
+
 ## Descriptions
 
 This part is deliberately small, but useful. Manifest lines can carry a short description so the contract is not just strict, but readable:
@@ -197,6 +238,11 @@ Supported forms:
 Quoted descriptions are safest if they contain spaces. Unquoted descriptions also work and are easiest when the description is the last directive on the line.
 
 Right now descriptions are stored in the manifest spec and carried into JSON validation entries when a typed rule fails. The immediate use is better contract readability, and it also sets up future doc generation without inventing a separate metadata file.
+
+That means the manifest can do double duty:
+
+- strict enough for checks
+- readable enough to act as lightweight env documentation
 
 Realistically, this is the kind of manifest line I wanted to write:
 
