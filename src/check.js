@@ -306,12 +306,12 @@ function parseManifestDirectives(comment) {
 
   const optional = /\boptional\b/i.test(normalized);
   const warning = /\bwarn(?:ing)?\b/i.test(normalized);
-  const typeMatch = normalized.match(/\btype=(string|int|number|boolean|url|json)\b/i);
+  const typeMatch = normalized.match(/\btype=(string|int|integer|number|boolean|url|json)\b/i);
   const enumMatch = normalized.match(/\benum=([^\s#]+)/i);
   const patternMatch = normalized.match(/\bpattern=([^\s#]+)/i);
 
   if (typeMatch) {
-    rules.type = typeMatch[1].toLowerCase();
+    rules.type = typeMatch[1].toLowerCase() === "integer" ? "int" : typeMatch[1].toLowerCase();
   }
 
   if (enumMatch) {

@@ -124,6 +124,7 @@ Supported directives:
 
 - `type=string`
 - `type=int`
+- `type=integer` (alias of `type=int`)
 - `type=number`
 - `type=boolean`
 - `type=url`

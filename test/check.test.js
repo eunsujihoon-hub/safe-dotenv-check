@@ -103,6 +103,7 @@ PORT=3000 # type=int
 APP_URL=https://example.com # type=url
 NODE_ENV=development # enum=development|staging|production
 FEATURE_FLAGS={} # type=json optional
+WORKER_COUNT=2 # type=integer
 API_KEY= # pattern=^sk-[a-z0-9]+$
 `);
 
@@ -112,6 +113,7 @@ API_KEY= # pattern=^sk-[a-z0-9]+$
     enum: ["development", "staging", "production"]
   });
   assert.deepEqual(example.optionalEntries.get("FEATURE_FLAGS").rules, { type: "json" });
+  assert.deepEqual(example.requiredEntries.get("WORKER_COUNT").rules, { type: "int" });
   assert.deepEqual(example.requiredEntries.get("API_KEY").rules, { pattern: "^sk-[a-z0-9]+$" });
 });
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 - 2026-06-04
+
+- add `type=integer` as an alias for `type=int` in manifest schema rules
+
 ## 1.0.0 - 2026-06-04
 
 - add contract-style schema validation with `type=`, `enum=`, and `pattern=` manifest directives
