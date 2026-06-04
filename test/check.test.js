@@ -117,6 +117,23 @@ API_KEY= # pattern=^sk-[a-z0-9]+$
   assert.deepEqual(example.requiredEntries.get("API_KEY").rules, { pattern: "^sk-[a-z0-9]+$" });
 });
 
+test("parseExampleFile supports env-specific entries and descriptions", () => {
+  const example = parseExampleFile(`
+DATABASE_URL=postgres://localhost/app # type=url desc="Shared database connection"
+?SENTRY_DSN= # env=dev desc=Local error tracking only
+SENTRY_DSN= # env=production desc=Production error tracking DSN
+`);
+
+  assert.equal(example.requiredEntries.get("DATABASE_URL").description, "Shared database connection");
+  assert.equal(example.requiredEntries.get("DATABASE_URL").envs.length, 0);
+  assert.equal(example.optionalEntries.get("SENTRY_DSN"), undefined);
+  assert.equal(example.requiredEntries.get("SENTRY_DSN"), undefined);
+  assert.equal(example.entries[1].description, "Local error tracking only");
+  assert.deepEqual(example.entries[1].envs, ["dev"]);
+  assert.equal(example.entries[2].description, "Production error tracking DSN");
+  assert.deepEqual(example.entries[2].envs, ["production"]);
+});
+
 test("compareEnv does not fail on missing optional keys", () => {
   const exampleEntries = parseExampleFile(`
 DATABASE_URL=
@@ -222,6 +239,46 @@ OTEL_EXPORTER_OTLP_ENDPOINT=collector
   });
 });
 
+test("compareEnv resolves env-specific tiers for the selected env name", () => {
+  const exampleEntries = parseExampleFile(`
+DATABASE_URL=postgres://localhost/app # type=url desc="Shared database connection"
+?SENTRY_DSN= # env=dev desc=Local error tracking only
+SENTRY_DSN= # env=production desc=Production error tracking DSN
+!SLACK_WEBHOOK_URL= # env=staging,production desc="Deploy notifications"
+`);
+
+  const devTargetEntries = parseEnvFile("DATABASE_URL=postgres://localhost/app\n");
+  const productionTargetEntries = parseEnvFile("DATABASE_URL=postgres://localhost/app\n");
+
+  assert.deepEqual(compareEnv(exampleEntries, devTargetEntries, { envName: "dev" }), {
+    missing: [],
+    empty: [],
+    invalid: [],
+    extra: [],
+    optional: ["SENTRY_DSN"],
+    warning: [],
+    warnMissing: [],
+    warnEmpty: [],
+    warnInvalid: [],
+    envName: "dev",
+    ok: true
+  });
+
+  assert.deepEqual(compareEnv(exampleEntries, productionTargetEntries, { envName: "production" }), {
+    missing: ["SENTRY_DSN"],
+    empty: [],
+    invalid: [],
+    extra: [],
+    optional: [],
+    warning: ["SLACK_WEBHOOK_URL"],
+    warnMissing: ["SLACK_WEBHOOK_URL"],
+    warnEmpty: [],
+    warnInvalid: [],
+    envName: "production",
+    ok: false
+  });
+});
+
 test("runCli supports json output", async () => {
   const fs = await import("node:fs/promises");
   const os = await import("node:os");
@@ -259,6 +316,52 @@ test("runCli supports json output", async () => {
         warnMissing: [],
         warnEmpty: [],
         warnInvalid: [],
+        ok: false
+      }
+    ]
+  });
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli applies env-specific manifest entries and includes envName in json output", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const envPath = path.join(tempDir, ".env.production");
+
+  await fs.writeFile(examplePath, "API_KEY= # env=production desc=Public API credential\n");
+  await fs.writeFile(envPath, "OTHER_KEY=1\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--example", examplePath, "--env", envPath, "--env-name", "production", "--format", "json"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 1);
+  assert.equal(stderr, "");
+  assert.deepEqual(JSON.parse(stdout), {
+    ok: false,
+    example: examplePath,
+    files: [
+      {
+        file: envPath,
+        missing: ["API_KEY"],
+        empty: [],
+        invalid: [],
+        extra: ["OTHER_KEY"],
+        optional: [],
+        warning: [],
+        warnMissing: [],
+        warnEmpty: [],
+        warnInvalid: [],
+        envName: "production",
         ok: false
       }
     ]

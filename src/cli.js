@@ -7,12 +7,14 @@ const HELP_TEXT = `safe-dotenv-check
 Usage:
   safe-dotenv-check --example .env.example --env .env
   safe-dotenv-check --example .env.example --env .env --env .env.production
+  safe-dotenv-check --example .env.example --env .env.production --env-name production
   safe-dotenv-check --example .env.example --env .env --allow-extra
   safe-dotenv-check --example .env.example --env .env --format json
 
 Options:
   --example <path>    Required manifest file, usually .env.example
   --env <path>        Target .env file to verify, repeatable
+  --env-name <name>   Optional logical env name, once or once per --env
   --allow-extra       Ignore keys that exist only in target files
   --format <type>     Output format: text or json
   --help              Show this message
@@ -30,6 +32,10 @@ Example schema rules:
   APP_URL=https://example.com # type=url
   NODE_ENV=development # enum=development|staging|production
   FEATURE_FLAGS={} # type=json optional
+
+Example env-specific manifest lines:
+  SENTRY_DSN= # env=production
+  ?DEBUG_TOOLBAR= # env=dev desc=Only used for local debugging
 `;
 
 export function runCli(argv, stdout, stderr) {
@@ -52,9 +58,11 @@ export function runCli(argv, stdout, stderr) {
     const reports = [];
 
     for (const envPath of parsed.envPaths) {
+      const envName = resolveEnvName(parsed.envNames, reports.length);
       const targetEntries = loadEnvFile(envPath);
       const result = compareEnv(exampleEntries, targetEntries, {
-        allowExtra: parsed.allowExtra
+        allowExtra: parsed.allowExtra,
+        envName
       });
       reports.push({
         file: envPath,
@@ -77,19 +85,19 @@ export function runCli(argv, stdout, stderr) {
         const hasWarnings = report.warnMissing.length > 0 || report.warnEmpty.length > 0 || report.warnInvalid.length > 0;
 
         if (report.ok && !hasWarnings) {
-          stdout.write(`PASS ${report.file}\n`);
+          stdout.write(formatReportHeader("PASS", report));
           continue;
         }
 
         if (report.ok) {
-          stdout.write(`WARN ${report.file}\n`);
+          stdout.write(formatReportHeader("WARN", report));
           writeList(stdout, "warn-missing", report.warnMissing);
           writeList(stdout, "warn-empty", report.warnEmpty);
           writeInvalidList(stdout, "warn-invalid", report.warnInvalid);
           continue;
         }
 
-        stdout.write(`FAIL ${report.file}\n`);
+        stdout.write(formatReportHeader("FAIL", report));
         writeList(stdout, "missing", report.missing);
         writeList(stdout, "empty", report.empty);
         writeInvalidList(stdout, "invalid", report.invalid);
@@ -111,6 +119,7 @@ export function runCli(argv, stdout, stderr) {
 
 function parseArgs(argv) {
   const envPaths = [];
+  const envNames = [];
   let examplePath = "";
   let allowExtra = false;
   let format = "text";
@@ -148,6 +157,13 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--env-name") {
+      const envName = argv[index + 1] ?? "";
+      envNames.push(envName);
+      index += 1;
+      continue;
+    }
+
     return { error: `unknown argument: ${arg}` };
   }
 
@@ -162,6 +178,10 @@ function parseArgs(argv) {
 
     if (!["text", "json"].includes(format)) {
       return { error: "--format must be either text or json" };
+    }
+
+    if (envNames.length > 1 && envNames.length !== envPaths.length) {
+      return { error: "--env-name must be provided once or once per --env" };
     }
 
     const filePaths = [examplePath, ...envPaths];
@@ -180,10 +200,27 @@ function parseArgs(argv) {
   return {
     allowExtra,
     envPaths,
+    envNames,
     examplePath,
     format,
     help
   };
+}
+
+function resolveEnvName(envNames, index) {
+  if (envNames.length === 0) {
+    return "";
+  }
+
+  if (envNames.length === 1) {
+    return envNames[0];
+  }
+
+  return envNames[index] ?? "";
+}
+
+function formatReportHeader(status, report) {
+  return `${status} ${report.file}${report.envName ? ` (${report.envName})` : ""}\n`;
 }
 
 function writeList(stdout, label, values) {

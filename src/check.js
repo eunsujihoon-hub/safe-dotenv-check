@@ -27,9 +27,7 @@ export function parseEnvFile(content) {
 }
 
 export function parseExampleFile(content) {
-  const requiredEntries = new Map();
-  const optionalEntries = new Map();
-  const warningEntries = new Map();
+  const entries = [];
 
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -58,23 +56,23 @@ export function parseExampleFile(content) {
     const directives = parseManifestDirectives(comment);
     const optional = optionalPrefix || directives.optional;
     const warning = warningPrefix || directives.warning;
-    const spec = {
+    entries.push({
+      key,
       exampleValue: normalizeValue(value),
-      rules: directives.rules
-    };
-    const targetMap = optional
-      ? optionalEntries
-      : warning
-        ? warningEntries
-        : requiredEntries;
-    targetMap.set(key, spec);
+      rules: directives.rules,
+      description: directives.description,
+      envs: directives.envs,
+      tier: optional
+        ? "optional"
+        : warning
+          ? "warning"
+          : "required"
+    });
   }
 
   return {
-    requiredEntries,
-    optionalEntries,
-    warningEntries,
-    allEntries: new Map([...requiredEntries, ...optionalEntries, ...warningEntries])
+    entries,
+    ...buildResolvedSpec(entries)
   };
 }
 
@@ -142,7 +140,7 @@ export function loadExampleFile(filePath) {
 }
 
 export function compareEnv(exampleEntries, targetEntries, options = {}) {
-  const exampleSpec = normalizeExampleSpec(exampleEntries);
+  const exampleSpec = normalizeExampleSpec(exampleEntries, options.envName);
   const requiredKeys = [...exampleSpec.requiredEntries.keys()];
   const warningKeys = [...exampleSpec.warningEntries.keys()];
   const optionalKeys = [...exampleSpec.optionalEntries.keys()];
@@ -167,7 +165,12 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
       continue;
     }
 
-    const failure = validateValueAgainstRules(key, targetEntries.get(key), exampleSpec.requiredEntries.get(key)?.rules);
+    const failure = validateValueAgainstRules(
+      key,
+      targetEntries.get(key),
+      exampleSpec.requiredEntries.get(key)?.rules,
+      exampleSpec.requiredEntries.get(key)?.description
+    );
     if (failure) {
       invalid.push(failure);
     }
@@ -184,7 +187,12 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
       continue;
     }
 
-    const failure = validateValueAgainstRules(key, targetEntries.get(key), exampleSpec.warningEntries.get(key)?.rules);
+    const failure = validateValueAgainstRules(
+      key,
+      targetEntries.get(key),
+      exampleSpec.warningEntries.get(key)?.rules,
+      exampleSpec.warningEntries.get(key)?.description
+    );
     if (failure) {
       warnInvalid.push(failure);
     }
@@ -199,7 +207,12 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
       continue;
     }
 
-    const failure = validateValueAgainstRules(key, targetEntries.get(key), exampleSpec.optionalEntries.get(key)?.rules);
+    const failure = validateValueAgainstRules(
+      key,
+      targetEntries.get(key),
+      exampleSpec.optionalEntries.get(key)?.rules,
+      exampleSpec.optionalEntries.get(key)?.description
+    );
     if (failure) {
       invalid.push(failure);
     }
@@ -209,7 +222,7 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
     ? []
     : [...targetKeys].filter((key) => !exampleSpec.allEntries.has(key)).sort();
 
-  return {
+  const report = {
     missing,
     empty,
     invalid,
@@ -221,9 +234,19 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
     warnInvalid,
     ok: missing.length === 0 && empty.length === 0 && invalid.length === 0 && extra.length === 0
   };
+
+  if (options.envName) {
+    report.envName = options.envName;
+  }
+
+  return report;
 }
 
-function normalizeExampleSpec(exampleEntries) {
+function normalizeExampleSpec(exampleEntries, envName = "") {
+  if (exampleEntries?.entries) {
+    return buildResolvedSpec(exampleEntries.entries, envName);
+  }
+
   if (exampleEntries?.requiredEntries && exampleEntries?.optionalEntries && exampleEntries?.warningEntries && exampleEntries?.allEntries) {
     return exampleEntries;
   }
@@ -233,6 +256,42 @@ function normalizeExampleSpec(exampleEntries) {
     optionalEntries: new Map(),
     warningEntries: new Map(),
     allEntries: new Map([...exampleEntries].map(([key, value]) => [key, normalizeLegacySpec(value)]))
+  };
+}
+
+function buildResolvedSpec(entries, envName = "") {
+  const requiredEntries = new Map();
+  const optionalEntries = new Map();
+  const warningEntries = new Map();
+
+  for (const entry of entries) {
+    if (!matchesEnv(entry.envs, envName)) {
+      continue;
+    }
+
+    requiredEntries.delete(entry.key);
+    optionalEntries.delete(entry.key);
+    warningEntries.delete(entry.key);
+
+    const targetMap = entry.tier === "optional"
+      ? optionalEntries
+      : entry.tier === "warning"
+        ? warningEntries
+        : requiredEntries;
+
+    targetMap.set(entry.key, {
+      exampleValue: entry.exampleValue,
+      rules: entry.rules,
+      description: entry.description,
+      envs: entry.envs
+    });
+  }
+
+  return {
+    requiredEntries,
+    optionalEntries,
+    warningEntries,
+    allEntries: new Map([...requiredEntries, ...optionalEntries, ...warningEntries])
   };
 }
 
@@ -309,6 +368,8 @@ function parseManifestDirectives(comment) {
   const typeMatch = normalized.match(/\btype=(string|int|integer|number|boolean|url|json)\b/i);
   const enumMatch = normalized.match(/\benum=([^\s#]+)/i);
   const patternMatch = normalized.match(/\bpattern=([^\s#]+)/i);
+  const envMatch = normalized.match(/\benv=([^\s#]+)/i);
+  const description = parseDescriptionDirective(normalized);
 
   if (typeMatch) {
     rules.type = typeMatch[1].toLowerCase() === "integer" ? "int" : typeMatch[1].toLowerCase();
@@ -322,46 +383,84 @@ function parseManifestDirectives(comment) {
     rules.pattern = patternMatch[1].trim();
   }
 
+  const envs = envMatch
+    ? envMatch[1].split(/[|,]/).map((item) => item.trim()).filter(Boolean)
+    : [];
+
   return {
     optional,
     warning,
-    rules
+    rules,
+    envs,
+    description
   };
 }
 
-function validateValueAgainstRules(key, value, rules = {}) {
+function parseDescriptionDirective(comment) {
+  const quotedMatch = comment.match(/\b(?:desc|description)=(["'])(.*?)\1/i);
+  if (quotedMatch) {
+    return quotedMatch[2].trim();
+  }
+
+  const inlineMatch = comment.match(/\b(?:desc|description)=(.+)$/i);
+  if (inlineMatch) {
+    return inlineMatch[1].trim();
+  }
+
+  return "";
+}
+
+function validateValueAgainstRules(key, value, rules = {}, description = "") {
   if (!rules || Object.keys(rules).length === 0) {
     return null;
   }
 
   if (rules.type && !matchesType(value, rules.type)) {
-    return buildValidationFailure(key, value, `type=${rules.type}`);
+    return buildValidationFailure(key, value, `type=${rules.type}`, description);
   }
 
   if (rules.enum && !rules.enum.includes(value)) {
-    return buildValidationFailure(key, value, `enum=${rules.enum.join("|")}`);
+    return buildValidationFailure(key, value, `enum=${rules.enum.join("|")}`, description);
   }
 
   if (rules.pattern) {
     try {
       const expression = new RegExp(rules.pattern);
       if (!expression.test(value)) {
-        return buildValidationFailure(key, value, `pattern=${rules.pattern}`);
+        return buildValidationFailure(key, value, `pattern=${rules.pattern}`, description);
       }
     } catch {
-      return buildValidationFailure(key, value, `pattern=${rules.pattern}`);
+      return buildValidationFailure(key, value, `pattern=${rules.pattern}`, description);
     }
   }
 
   return null;
 }
 
-function buildValidationFailure(key, value, expected) {
-  return {
+function buildValidationFailure(key, value, expected, description) {
+  const failure = {
     key,
     value,
     expected
   };
+
+  if (description) {
+    failure.description = description;
+  }
+
+  return failure;
+}
+
+function matchesEnv(entryEnvs = [], envName = "") {
+  if (!entryEnvs || entryEnvs.length === 0) {
+    return true;
+  }
+
+  if (!envName) {
+    return false;
+  }
+
+  return entryEnvs.includes(envName);
 }
 
 function matchesType(value, type) {

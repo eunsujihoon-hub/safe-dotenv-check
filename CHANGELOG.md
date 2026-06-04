@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 - 2026-06-04
+
+- add env-scoped manifest rules via `env=` so keys can be optional in one environment and required in another
+- add `desc=` and `description=` manifest directives for lightweight key descriptions
+- expose selected env names in CLI JSON output and GitHub Action summaries
+- extend the GitHub Action with `env_names` input for env-specific contract checks
+
 ## 1.0.1 - 2026-06-04
 
 - add `type=integer` as an alias for `type=int` in manifest schema rules

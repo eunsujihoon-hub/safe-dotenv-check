@@ -8,6 +8,10 @@ inputs:
   env_files:
     description: Newline-separated target .env file paths to validate.
     required: true
+  env_names:
+    description: Optional newline-separated logical env names, once or once per env file.
+    required: false
+    default: ""
   allow_extra:
     description: Set to true to ignore keys that exist only in target env files.
     required: false
@@ -48,6 +52,14 @@ runs:
         ${{ inputs.env_files }}
         EOF
 
+        while IFS= read -r line; do
+          if [ -n "$line" ]; then
+            args+=(--env-name "$line")
+          fi
+        done <<'EOF'
+        ${{ inputs.env_names }}
+        EOF
+
         if [ "${{ inputs.allow_extra }}" = "true" ]; then
           args+=(--allow-extra)
         fi
@@ -77,12 +89,13 @@ runs:
 
         process.stdout.write("## safe-dotenv-check\n\n");
         process.stdout.write(`Manifest: \`${report.example}\`\n\n`);
-        process.stdout.write("| File | Status | Missing | Empty | Invalid | Extra | Warn Missing | Warn Empty | Warn Invalid |\n");
-        process.stdout.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
+        process.stdout.write("| File | Env | Status | Missing | Empty | Invalid | Extra | Warn Missing | Warn Empty | Warn Invalid |\n");
+        process.stdout.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
 
         for (const item of report.files) {
           const hasWarnings = item.warnMissing.length > 0 || item.warnEmpty.length > 0 || item.warnInvalid.length > 0;
           const status = item.ok ? (hasWarnings ? "WARN" : "PASS") : "FAIL";
+          const envName = item.envName || "-";
           const missing = item.missing.length ? item.missing.join(", ") : "-";
           const empty = item.empty.length ? item.empty.join(", ") : "-";
           const invalid = item.invalid.length ? item.invalid.map((entry) => `${entry.key} (${entry.expected})`).join(", ") : "-";
@@ -90,7 +103,7 @@ runs:
           const warnMissing = item.warnMissing.length ? item.warnMissing.join(", ") : "-";
           const warnEmpty = item.warnEmpty.length ? item.warnEmpty.join(", ") : "-";
           const warnInvalid = item.warnInvalid.length ? item.warnInvalid.map((entry) => `${entry.key} (${entry.expected})`).join(", ") : "-";
-          process.stdout.write(`| \`${item.file}\` | ${status} | ${missing} | ${empty} | ${invalid} | ${extra} | ${warnMissing} | ${warnEmpty} | ${warnInvalid} |\n`);
+          process.stdout.write(`| \`${item.file}\` | \`${envName}\` | ${status} | ${missing} | ${empty} | ${invalid} | ${extra} | ${warnMissing} | ${warnEmpty} | ${warnInvalid} |\n`);
         }
           EOF
         fi
