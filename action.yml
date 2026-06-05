@@ -48,17 +48,13 @@ runs:
           if [ -n "$line" ]; then
             args+=(--env "$line")
           fi
-        done <<'EOF'
-        ${{ inputs.env_files }}
-        EOF
+        done < <(printf '%s\n' "${{ inputs.env_files }}")
 
         while IFS= read -r line; do
           if [ -n "$line" ]; then
             args+=(--env-name "$line")
           fi
-        done <<'EOF'
-        ${{ inputs.env_names }}
-        EOF
+        done < <(printf '%s\n' "${{ inputs.env_names }}")
 
         if [ "${{ inputs.allow_extra }}" = "true" ]; then
           args+=(--allow-extra)
@@ -83,30 +79,30 @@ runs:
         fi
 
         if [ "${{ inputs.summary }}" = "true" ]; then
-          REPORT_PATH="${report_path}" node <<'EOF' >>"${GITHUB_STEP_SUMMARY}"
-        const fs = require("node:fs");
-        const report = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, "utf8"));
-        const escapeCell = (value) => String(value).replace(/\|/g, "\\|").replace(/\n/g, "<br>");
+          REPORT_PATH="${report_path}" node -e '
+            const fs = require("node:fs");
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, "utf8"));
+            const escapeCell = (value) => String(value).replace(/\|/g, "\\|").replace(/\n/g, "<br>");
 
-        process.stdout.write("## safe-dotenv-check\n\n");
-        process.stdout.write(`Manifest: \`${escapeCell(report.example)}\`\n\n`);
-        process.stdout.write("| File | Env | Status | Missing | Empty | Invalid | Extra | Warn Missing | Warn Empty | Warn Invalid |\n");
-        process.stdout.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
+            process.stdout.write("## safe-dotenv-check\n\n");
+            process.stdout.write(`Manifest: \`${escapeCell(report.example)}\`\n\n`);
+            process.stdout.write("| File | Env | Status | Missing | Empty | Invalid | Extra | Warn Missing | Warn Empty | Warn Invalid |\n");
+            process.stdout.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
 
-        for (const item of report.files) {
-          const hasWarnings = item.warnMissing.length > 0 || item.warnEmpty.length > 0 || item.warnInvalid.length > 0;
-          const status = item.ok ? (hasWarnings ? "WARN" : "PASS") : "FAIL";
-          const envName = item.envName || "-";
-          const missing = item.missing.length ? item.missing.join(", ") : "-";
-          const empty = item.empty.length ? item.empty.join(", ") : "-";
-          const invalid = item.invalid.length ? item.invalid.map((entry) => `${entry.key} (${entry.expected})`).join(", ") : "-";
-          const extra = item.extra.length ? item.extra.join(", ") : "-";
-          const warnMissing = item.warnMissing.length ? item.warnMissing.join(", ") : "-";
-          const warnEmpty = item.warnEmpty.length ? item.warnEmpty.join(", ") : "-";
-          const warnInvalid = item.warnInvalid.length ? item.warnInvalid.map((entry) => `${entry.key} (${entry.expected})`).join(", ") : "-";
-          process.stdout.write(`| \`${escapeCell(item.file)}\` | \`${escapeCell(envName)}\` | ${status} | ${escapeCell(missing)} | ${escapeCell(empty)} | ${escapeCell(invalid)} | ${escapeCell(extra)} | ${escapeCell(warnMissing)} | ${escapeCell(warnEmpty)} | ${escapeCell(warnInvalid)} |\n`);
-        }
-          EOF
+            for (const item of report.files) {
+              const hasWarnings = item.warnMissing.length > 0 || item.warnEmpty.length > 0 || item.warnInvalid.length > 0;
+              const status = item.ok ? (hasWarnings ? "WARN" : "PASS") : "FAIL";
+              const envName = item.envName || "-";
+              const missing = item.missing.length ? item.missing.join(", ") : "-";
+              const empty = item.empty.length ? item.empty.join(", ") : "-";
+              const invalid = item.invalid.length ? item.invalid.map((entry) => `${entry.key} (${entry.expected})`).join(", ") : "-";
+              const extra = item.extra.length ? item.extra.join(", ") : "-";
+              const warnMissing = item.warnMissing.length ? item.warnMissing.join(", ") : "-";
+              const warnEmpty = item.warnEmpty.length ? item.warnEmpty.join(", ") : "-";
+              const warnInvalid = item.warnInvalid.length ? item.warnInvalid.map((entry) => `${entry.key} (${entry.expected})`).join(", ") : "-";
+              process.stdout.write(`| \`${escapeCell(item.file)}\` | \`${escapeCell(envName)}\` | ${status} | ${escapeCell(missing)} | ${escapeCell(empty)} | ${escapeCell(invalid)} | ${escapeCell(extra)} | ${escapeCell(warnMissing)} | ${escapeCell(warnEmpty)} | ${escapeCell(warnInvalid)} |\n`);
+            }
+          ' >>"${GITHUB_STEP_SUMMARY}"
         fi
 
         exit "${status}"
