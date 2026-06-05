@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 - 2026-06-05
+
+- improve README conversion copy so the problem, audience, and quick start are visible immediately
+- add a searchable explainer doc: `Why .env.example is not enough`
+- update package metadata and repository topics for better npm and GitHub discovery
+
 ## 1.2.0 - 2026-06-05
 
 - prevent words inside `desc=` and `description=` text from changing manifest validation rules
