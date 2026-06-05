@@ -3,6 +3,31 @@
 [![CI](https://github.com/eunsujihoon-hub/safe-dotenv-check/actions/workflows/ci.yml/badge.svg)](https://github.com/eunsujihoon-hub/safe-dotenv-check/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
+Validate `.env` files against `.env.example` before broken config reaches CI or production.
+
+`safe-dotenv-check` is for teams that already keep a `.env.example`, but still get burned by missing keys, empty values, wrong value shapes, or environment drift between local, staging, and production.
+
+It gives you:
+
+- missing and empty required key checks
+- optional and warning-only env keys
+- schema rules like `type=`, `enum=`, and `pattern=`
+- environment-specific contracts like `env=production`
+- plain CLI output plus JSON output for CI
+- a reusable GitHub Action for repo-level env checks
+
+Quick start:
+
+```bash
+npx safe-dotenv-check
+```
+
+If `.env.example` and `.env` exist in the current directory, that is enough to run the default check.
+
+If the main problem is "this should fail before deploy", jump straight to [GitHub Action](#github-action).
+
+If you want the longer version of the problem this solves, read [Why `.env.example` is not enough](./docs/why-env-example-is-not-enough.md).
+
 This came out of a pretty boring failure mode: the repo had `.env.example`, everyone assumed the env story was handled, and then the deploy still broke because the real runtime env had drifted.
 
 Most of the time the failure was not dramatic. It was small stuff that wasted time:
@@ -71,7 +96,7 @@ jobs:
   env-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.0
         with:
           example: .env.example
