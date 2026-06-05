@@ -5,19 +5,26 @@ import { compareEnv, loadEnvFile, loadExampleFile } from "./check.js";
 const HELP_TEXT = `safe-dotenv-check
 
 Usage:
+  safe-dotenv-check
   safe-dotenv-check --example .env.example --env .env
+  safe-dotenv-check .env.production
   safe-dotenv-check --example .env.example --env .env --env .env.production
   safe-dotenv-check --example .env.example --env .env.production --env-name production
   safe-dotenv-check --example .env.example --env .env --allow-extra
   safe-dotenv-check --example .env.example --env .env --format json
 
 Options:
-  --example <path>    Required manifest file, usually .env.example
+  --example <path>    Manifest file, usually .env.example
   --env <path>        Target .env file to verify, repeatable
   --env-name <name>   Optional logical env name, once or once per --env
   --allow-extra       Ignore keys that exist only in target files
   --format <type>     Output format: text or json
   --help              Show this message
+
+Defaults:
+  If omitted, --example defaults to .env.example and --env defaults to .env when those files exist.
+  Positional arguments are treated as --env paths.
+  When no --env-name is provided, names such as production are inferred from files like .env.production.
 
 Example optional keys:
   ?SENTRY_DSN=
@@ -58,7 +65,7 @@ export function runCli(argv, stdout, stderr) {
     const reports = [];
 
     for (const envPath of parsed.envPaths) {
-      const envName = resolveEnvName(parsed.envNames, reports.length);
+      const envName = resolveEnvName(parsed.envNames, reports.length, envPath);
       const targetEntries = loadEnvFile(envPath);
       const result = compareEnv(exampleEntries, targetEntries, {
         allowExtra: parsed.allowExtra,
@@ -120,6 +127,7 @@ export function runCli(argv, stdout, stderr) {
 function parseArgs(argv) {
   const envPaths = [];
   const envNames = [];
+  const positionalEnvPaths = [];
   let examplePath = "";
   let allowExtra = false;
   let format = "text";
@@ -164,16 +172,30 @@ function parseArgs(argv) {
       continue;
     }
 
-    return { error: `unknown argument: ${arg}` };
+    if (arg.startsWith("-")) {
+      return { error: `unknown argument: ${arg}` };
+    }
+
+    positionalEnvPaths.push(arg);
   }
 
   if (!help) {
+    if (!examplePath && fs.existsSync(path.resolve(".env.example"))) {
+      examplePath = ".env.example";
+    }
+
+    if (envPaths.length === 0 && positionalEnvPaths.length === 0 && fs.existsSync(path.resolve(".env"))) {
+      envPaths.push(".env");
+    }
+
+    envPaths.push(...positionalEnvPaths);
+
     if (!examplePath) {
-      return { error: "--example is required" };
+      return { error: "--example is required (or add a local .env.example)" };
     }
 
     if (envPaths.length === 0) {
-      return { error: "at least one --env is required" };
+      return { error: "at least one --env is required (or add a local .env)" };
     }
 
     if (!["text", "json"].includes(format)) {
@@ -207,9 +229,9 @@ function parseArgs(argv) {
   };
 }
 
-function resolveEnvName(envNames, index) {
+function resolveEnvName(envNames, index, envPath) {
   if (envNames.length === 0) {
-    return "";
+    return inferEnvNameFromPath(envPath);
   }
 
   if (envNames.length === 1) {
@@ -217,6 +239,27 @@ function resolveEnvName(envNames, index) {
   }
 
   return envNames[index] ?? "";
+}
+
+function inferEnvNameFromPath(envPath) {
+  if (!envPath) {
+    return "";
+  }
+
+  const fileName = path.basename(envPath);
+  if (fileName === ".env") {
+    return "";
+  }
+
+  const match = fileName.match(/^\.env\.(.+)$/);
+  if (!match) {
+    return "";
+  }
+
+  const suffix = match[1];
+  return suffix.endsWith(".local")
+    ? suffix.slice(0, -".local".length)
+    : suffix;
 }
 
 function formatReportHeader(status, report) {

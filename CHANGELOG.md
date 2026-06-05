@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 - 2026-06-05
+
+- prevent words inside `desc=` and `description=` text from changing manifest validation rules
+- allow zero-config CLI runs by defaulting to local `.env.example` and `.env` files when present
+- accept positional env file arguments and infer env names from paths such as `.env.production`
+- escape GitHub Action step summary table cells so enum and regex output stays readable
+
 ## 1.1.0 - 2026-06-04
 
 - add env-scoped manifest rules via `env=` so keys can be optional in one environment and required in another

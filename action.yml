@@ -86,9 +86,10 @@ runs:
           REPORT_PATH="${report_path}" node <<'EOF' >>"${GITHUB_STEP_SUMMARY}"
         const fs = require("node:fs");
         const report = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, "utf8"));
+        const escapeCell = (value) => String(value).replace(/\|/g, "\\|").replace(/\n/g, "<br>");
 
         process.stdout.write("## safe-dotenv-check\n\n");
-        process.stdout.write(`Manifest: \`${report.example}\`\n\n`);
+        process.stdout.write(`Manifest: \`${escapeCell(report.example)}\`\n\n`);
         process.stdout.write("| File | Env | Status | Missing | Empty | Invalid | Extra | Warn Missing | Warn Empty | Warn Invalid |\n");
         process.stdout.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
 
@@ -103,7 +104,7 @@ runs:
           const warnMissing = item.warnMissing.length ? item.warnMissing.join(", ") : "-";
           const warnEmpty = item.warnEmpty.length ? item.warnEmpty.join(", ") : "-";
           const warnInvalid = item.warnInvalid.length ? item.warnInvalid.map((entry) => `${entry.key} (${entry.expected})`).join(", ") : "-";
-          process.stdout.write(`| \`${item.file}\` | \`${envName}\` | ${status} | ${missing} | ${empty} | ${invalid} | ${extra} | ${warnMissing} | ${warnEmpty} | ${warnInvalid} |\n`);
+          process.stdout.write(`| \`${escapeCell(item.file)}\` | \`${escapeCell(envName)}\` | ${status} | ${escapeCell(missing)} | ${escapeCell(empty)} | ${escapeCell(invalid)} | ${escapeCell(extra)} | ${escapeCell(warnMissing)} | ${escapeCell(warnEmpty)} | ${escapeCell(warnInvalid)} |\n`);
         }
           EOF
         fi

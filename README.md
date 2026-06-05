@@ -55,8 +55,12 @@ npm install --global safe-dotenv-check
 Or run it without installing:
 
 ```bash
+npx safe-dotenv-check
+npx safe-dotenv-check .env.production
 npx safe-dotenv-check --example .env.example --env .env
 ```
+
+If `.env.example` and `.env` exist in the current directory, you can run the tool with no flags and it will use those defaults. Positional arguments are treated as target env files, so `safe-dotenv-check .env.production` is equivalent to `safe-dotenv-check --env .env.production`.
 
 ## GitHub Action
 
@@ -68,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.1.0
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.0
         with:
           example: .env.example
           env_files: |
@@ -93,12 +97,16 @@ Inputs:
 The basic shape is always the same: point at the manifest, then point at the env file you actually care about.
 
 ```bash
+safe-dotenv-check
+safe-dotenv-check .env.production
 safe-dotenv-check --example .env.example --env .env
 safe-dotenv-check --example .env.example --env .env --env .env.production
 safe-dotenv-check --example .env.example --env .env.production --env-name production
 safe-dotenv-check --example .env.example --env .env --allow-extra
 safe-dotenv-check --example .env.example --env .env --format json
 ```
+
+If you do not pass `--env-name`, the CLI also infers names from files such as `.env.production` and `.env.staging.local`.
 
 ## Exit codes
 
@@ -236,6 +244,8 @@ Supported forms:
 - `description=...`
 
 Quoted descriptions are safest if they contain spaces. Unquoted descriptions also work and are easiest when the description is the last directive on the line.
+
+Directive parsing ignores words that only appear inside `desc=` or `description=` text, so prose such as `desc="optional for local testing"` will stay a description instead of changing validation behavior.
 
 Right now descriptions are stored in the manifest spec and carried into JSON validation entries when a typed rule fails. The immediate use is better contract readability, and it also sets up future doc generation without inventing a separate metadata file.
 

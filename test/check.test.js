@@ -137,6 +137,21 @@ SENTRY_DSN= # env=production desc=Production error tracking DSN
   assert.deepEqual(example.entries[3].envs, ["staging", "production"]);
 });
 
+test("parseExampleFile does not treat description text as directives", () => {
+  const example = parseExampleFile(`
+API_KEY= # desc="optional warning string number env=dev should stay description text"
+`);
+
+  assert.deepEqual([...example.requiredEntries.keys()], ["API_KEY"]);
+  assert.deepEqual([...example.optionalEntries.keys()], []);
+  assert.deepEqual([...example.warningEntries.keys()], []);
+  assert.deepEqual(example.requiredEntries.get("API_KEY").rules, {});
+  assert.equal(
+    example.requiredEntries.get("API_KEY").description,
+    "optional warning string number env=dev should stay description text"
+  );
+});
+
 test("compareEnv does not fail on missing optional keys", () => {
   const exampleEntries = parseExampleFile(`
 DATABASE_URL=
@@ -374,6 +389,36 @@ test("runCli supports json output", async () => {
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 
+test("runCli discovers default .env.example and .env paths", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const previousCwd = process.cwd();
+
+  await fs.writeFile(path.join(tempDir, ".env.example"), "API_KEY=\n");
+  await fs.writeFile(path.join(tempDir, ".env"), "API_KEY=test\n");
+
+  process.chdir(tempDir);
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    [],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  process.chdir(previousCwd);
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(stdout, "PASS .env\n");
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
 test("runCli applies env-specific manifest entries and includes envName in json output", async () => {
   const fs = await import("node:fs/promises");
   const os = await import("node:os");
@@ -390,6 +435,52 @@ test("runCli applies env-specific manifest entries and includes envName in json 
   let stderr = "";
   const exitCode = runCli(
     ["--example", examplePath, "--env", envPath, "--env-name", "production", "--format", "json"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 1);
+  assert.equal(stderr, "");
+  assert.deepEqual(JSON.parse(stdout), {
+    ok: false,
+    example: examplePath,
+    files: [
+      {
+        file: envPath,
+        missing: ["API_KEY"],
+        empty: [],
+        invalid: [],
+        extra: ["OTHER_KEY"],
+        optional: [],
+        warning: [],
+        warnMissing: [],
+        warnEmpty: [],
+        warnInvalid: [],
+        envName: "production",
+        ok: false
+      }
+    ]
+  });
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli treats positional arguments as env paths and infers env names", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const envPath = path.join(tempDir, ".env.production");
+
+  await fs.writeFile(examplePath, "API_KEY= # env=production\n");
+  await fs.writeFile(envPath, "OTHER_KEY=1\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--example", examplePath, envPath, "--format", "json"],
     { write(chunk) { stdout += chunk; } },
     { write(chunk) { stderr += chunk; } }
   );

@@ -363,13 +363,19 @@ function parseManifestDirectives(comment) {
     };
   }
 
-  const optional = /\boptional\b/i.test(normalized);
-  const warning = /\bwarn(?:ing)?\b/i.test(normalized);
-  const typeMatch = normalized.match(/\btype=(string|int|integer|number|boolean|url|json)\b/i);
-  const enumMatch = normalized.match(/\benum=([^\s#]+)/i);
-  const patternMatch = normalized.match(/\bpattern=([^\s#]+)/i);
-  const envMatch = normalized.match(/\benv=([^\s#]+)/i);
-  const description = parseDescriptionDirective(normalized);
+  const tokens = tokenizeDirectiveComment(normalized);
+  const description = parseDescriptionFromTokens(tokens);
+  const directiveTokens = tokens.filter((token) => !/^(?:desc|description)=/i.test(token));
+  const optional = directiveTokens.some((token) => /^optional$/i.test(token));
+  const warning = directiveTokens.some((token) => /^warn(?:ing)?$/i.test(token));
+  const typeToken = directiveTokens.find((token) => /^type=/i.test(token));
+  const enumToken = directiveTokens.find((token) => /^enum=/i.test(token));
+  const patternToken = directiveTokens.find((token) => /^pattern=/i.test(token));
+  const envToken = directiveTokens.find((token) => /^env=/i.test(token));
+  const typeMatch = typeToken?.match(/^type=(string|int|integer|number|boolean|url|json)$/i);
+  const enumMatch = enumToken?.match(/^enum=(.+)$/i);
+  const patternMatch = patternToken?.match(/^pattern=(.+)$/i);
+  const envMatch = envToken?.match(/^env=(.+)$/i);
 
   if (typeMatch) {
     rules.type = typeMatch[1].toLowerCase() === "integer" ? "int" : typeMatch[1].toLowerCase();
@@ -396,18 +402,79 @@ function parseManifestDirectives(comment) {
   };
 }
 
-function parseDescriptionDirective(comment) {
-  const quotedMatch = comment.match(/\b(?:desc|description)=(["'])(.*?)\1/i);
-  if (quotedMatch) {
-    return quotedMatch[2].trim();
+function tokenizeDirectiveComment(comment) {
+  const tokens = [];
+  let current = "";
+  let quote = "";
+  let escaped = false;
+
+  for (const char of comment) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      current += char;
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      current += char;
+      if (char === quote) {
+        quote = "";
+      }
+      continue;
+    }
+
+    if (char === "\"" || char === "'") {
+      current += char;
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
   }
 
-  const inlineMatch = comment.match(/\b(?:desc|description)=(.+)$/i);
-  if (inlineMatch) {
-    return inlineMatch[1].trim();
+  if (current) {
+    tokens.push(current);
   }
 
-  return "";
+  return tokens;
+}
+
+function parseDescriptionFromTokens(tokens) {
+  const descriptionIndex = tokens.findIndex((token) => /^(?:desc|description)=/i.test(token));
+  if (descriptionIndex === -1) {
+    return "";
+  }
+
+  const token = tokens[descriptionIndex];
+  const rawValue = token.replace(/^(?:desc|description)=/i, "");
+  const remainder = tokens.slice(descriptionIndex + 1);
+  return normalizeDescriptionValue([rawValue, ...remainder].join(" ").trim());
+}
+
+function normalizeDescriptionValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+    return value.slice(1, -1).trim();
+  }
+
+  return value.trim();
 }
 
 function validateValueAgainstRules(key, value, rules = {}, description = "") {

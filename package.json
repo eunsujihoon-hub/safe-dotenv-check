@@ -1,6 +1,6 @@
 {
   "name": "safe-dotenv-check",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A small, stable CLI for manifest-based environment contract checks in local, CI, and deploy workflows.",
   "type": "module",
   "homepage": "https://github.com/eunsujihoon-hub/safe-dotenv-check#readme",
