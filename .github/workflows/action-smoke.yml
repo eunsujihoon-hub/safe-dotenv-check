@@ -7,21 +7,73 @@ on:
   pull_request:
 
 jobs:
-  smoke:
+  success:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
       - name: Create sample env files
         run: |
           cat <<'EOF' > .env.example
-          DATABASE_URL=
+          DATABASE_URL= # type=url
           ?SENTRY_DSN=
+          !SLACK_WEBHOOK_URL=
           EOF
 
           cat <<'EOF' > .env.ci
           DATABASE_URL=postgres://localhost/app
           EOF
       - uses: ./
+        id: env_check
         with:
           example: .env.example
           env_files: .env.ci
+          json_output_path: artifacts/report.json
+      - name: Assert outputs and artifacts
+        run: |
+          test "${{ steps.env_check.outputs.ok }}" = "true"
+          test -f "${{ steps.env_check.outputs.report_path }}"
+          test -f artifacts/report.json
+          grep -q '"ok": true' artifacts/report.json
+          grep -q "## safe-dotenv-check" "${GITHUB_STEP_SUMMARY}"
+          grep -q "WARN" "${GITHUB_STEP_SUMMARY}"
+  failure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Create failing env files
+        run: |
+          cat <<'EOF' > .env.example
+          DATABASE_URL= # type=url
+          API_KEY= # pattern=^sk-[a-z0-9]+$
+          EOF
+
+          cat <<'EOF' > .env.production
+          DATABASE_URL=not-a-url
+          EOF
+      - uses: ./
+        id: failing_check
+        continue-on-error: true
+        with:
+          example: .env.example
+          env_files: .env.production
+          env_names: production
+          json_output_path: artifacts/failing-report.json
+      - name: Assert failure details
+        run: |
+          test "${{ steps.failing_check.outcome }}" = "failure"
+          test "${{ steps.failing_check.outputs.ok }}" = "false"
+          test -f "${{ steps.failing_check.outputs.report_path }}"
+          test -f artifacts/failing-report.json
+          grep -q '"ok": false' artifacts/failing-report.json
+          grep -q '"missing": \[' artifacts/failing-report.json
+          grep -q '"API_KEY"' artifacts/failing-report.json
+          grep -q '"expected": "type=url"' artifacts/failing-report.json
+          grep -q "FAIL" "${GITHUB_STEP_SUMMARY}"

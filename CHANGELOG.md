@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2 - 2026-06-07
+
+- verify the published Node support range in CI with a Node 18, 20, and 22 matrix
+- strengthen the GitHub Action smoke workflow with success and failure path assertions, JSON report checks, and step summary checks
+- improve README onboarding with a minimal manifest example plus text and JSON output examples
+- add practical setup guides for GitHub Actions, Next.js env contracts, and monorepo env checks
+- remove repository noise from stray Finder metadata
+
 ## 1.2.1 - 2026-06-05
 
 - improve README conversion copy so the problem, audience, and quick start are visible immediately

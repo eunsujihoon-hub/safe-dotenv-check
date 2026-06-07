@@ -24,9 +24,35 @@ npx safe-dotenv-check
 
 If `.env.example` and `.env` exist in the current directory, that is enough to run the default check.
 
+Minimal manifest example:
+
+```dotenv
+# .env.example
+DATABASE_URL= # type=url
+OPENAI_API_KEY=
+?SENTRY_DSN=
+!SLACK_WEBHOOK_URL=
+NODE_ENV=development # enum=development|staging|production
+```
+
+Typical failure output:
+
+```text
+FAIL .env.production (production)
+  missing: OPENAI_API_KEY
+  invalid: DATABASE_URL (type=url), NODE_ENV (enum=development|staging|production)
+```
+
+The same check in JSON for CI:
+
+```bash
+safe-dotenv-check --example .env.example --env .env.production --env-name production --format json
+```
+
 If the main problem is "this should fail before deploy", jump straight to [GitHub Action](#github-action).
 
 If you want the longer version of the problem this solves, read [Why `.env.example` is not enough](./docs/why-env-example-is-not-enough.md).
+If you want concrete setups, see [GitHub Actions guide](./docs/github-actions.md), [Next.js env contract guide](./docs/nextjs-env-contract.md), and [monorepo env checks](./docs/monorepo-env-checks.md).
 
 This came out of a pretty boring failure mode: the repo had `.env.example`, everyone assumed the env story was handled, and then the deploy still broke because the real runtime env had drifted.
 
@@ -97,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.1
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.2
         with:
           example: .env.example
           env_files: |
@@ -116,6 +142,8 @@ Inputs:
 - `allow_extra`: set to `true` to ignore keys that exist only in target files
 - `summary`: set to `false` to skip step summary output
 - `json_output_path`: optional path where the JSON report should be copied
+
+If you want a copy-paste setup guide instead of just the raw action inputs, see [docs/github-actions.md](./docs/github-actions.md).
 
 ## Usage
 
