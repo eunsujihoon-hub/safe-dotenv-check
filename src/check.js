@@ -235,11 +235,23 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
     ok: missing.length === 0 && empty.length === 0 && invalid.length === 0 && extra.length === 0
   };
 
+  if (options.includeDescriptions) {
+    report.descriptions = buildDescriptions(exampleSpec.allEntries);
+  }
+
   if (options.envName) {
     report.envName = options.envName;
   }
 
   return report;
+}
+
+function buildDescriptions(entries) {
+  return Object.fromEntries(
+    [...entries]
+      .filter(([, entry]) => entry.description)
+      .map(([key, entry]) => [key, entry.description])
+  );
 }
 
 function normalizeExampleSpec(exampleEntries, envName = "") {

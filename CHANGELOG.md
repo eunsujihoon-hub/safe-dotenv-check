@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3 - 2026-06-08
+
+- add `--show-descriptions` so CLI text and JSON reports can include manifest `desc=`/`description=` context
+- expose `show_descriptions` in the GitHub Action and include description notes in the step summary
+- publish future releases with `npm publish --provenance --access public` to keep npm provenance metadata complete
+
 ## 1.2.2 - 2026-06-07
 
 - verify the published Node support range in CI with a Node 18, 20, and 22 matrix

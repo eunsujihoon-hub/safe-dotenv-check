@@ -14,6 +14,7 @@ It gives you:
 - schema rules like `type=`, `enum=`, and `pattern=`
 - environment-specific contracts like `env=production`
 - plain CLI output plus JSON output for CI
+- optional descriptions in reports when a key needs context
 - a reusable GitHub Action for repo-level env checks
 
 Quick start:
@@ -123,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.2
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.3
         with:
           example: .env.example
           env_files: |
@@ -140,6 +141,7 @@ Inputs:
 - `env_files`: newline-separated target env file paths
 - `env_names`: optional newline-separated logical env names, once or once per env file
 - `allow_extra`: set to `true` to ignore keys that exist only in target files
+- `show_descriptions`: set to `true` to include manifest `desc=`/`description=` text in reports
 - `summary`: set to `false` to skip step summary output
 - `json_output_path`: optional path where the JSON report should be copied
 
@@ -157,6 +159,7 @@ safe-dotenv-check --example .env.example --env .env --env .env.production
 safe-dotenv-check --example .env.example --env .env.production --env-name production
 safe-dotenv-check --example .env.example --env .env --allow-extra
 safe-dotenv-check --example .env.example --env .env --format json
+safe-dotenv-check --example .env.example --env .env --show-descriptions
 ```
 
 If you do not pass `--env-name`, the CLI also infers names from files such as `.env.production` and `.env.staging.local`.
@@ -301,6 +304,18 @@ Quoted descriptions are safest if they contain spaces. Unquoted descriptions als
 Directive parsing ignores words that only appear inside `desc=` or `description=` text, so prose such as `desc="optional for local testing"` will stay a description instead of changing validation behavior.
 
 Right now descriptions are stored in the manifest spec and carried into JSON validation entries when a typed rule fails. The immediate use is better contract readability, and it also sets up future doc generation without inventing a separate metadata file.
+
+When you want the report itself to explain what each key is for, pass `--show-descriptions`:
+
+```bash
+safe-dotenv-check --example .env.example --env .env.production --show-descriptions
+```
+
+```text
+FAIL .env.production
+  missing: OPENAI_API_KEY - Server-side OpenAI key
+  empty: DATABASE_URL - Primary Postgres connection
+```
 
 That means the manifest can do double duty:
 

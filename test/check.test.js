@@ -199,6 +199,31 @@ OTEL_EXPORTER_OTLP_ENDPOINT=
   });
 });
 
+test("compareEnv can include manifest descriptions in reports", () => {
+  const exampleEntries = parseExampleFile(`
+DATABASE_URL= # desc="Primary Postgres connection"
+?SENTRY_DSN= # desc=Optional error tracking DSN
+`);
+  const targetEntries = parseEnvFile("SENTRY_DSN=https://example.com\n");
+
+  assert.deepEqual(compareEnv(exampleEntries, targetEntries, { includeDescriptions: true }), {
+    missing: ["DATABASE_URL"],
+    empty: [],
+    invalid: [],
+    extra: [],
+    optional: ["SENTRY_DSN"],
+    warning: [],
+    warnMissing: [],
+    warnEmpty: [],
+    warnInvalid: [],
+    ok: false,
+    descriptions: {
+      DATABASE_URL: "Primary Postgres connection",
+      SENTRY_DSN: "Optional error tracking DSN"
+    }
+  });
+});
+
 test("compareEnv fails when a required key only has an inline comment", () => {
   const exampleEntries = parseExampleFile("API_KEY=\n");
   const targetEntries = parseEnvFile("API_KEY= # comment\n");
@@ -384,6 +409,47 @@ test("runCli supports json output", async () => {
         ok: false
       }
     ]
+  });
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli can show descriptions in text and json output", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const envPath = path.join(tempDir, ".env");
+
+  await fs.writeFile(examplePath, "API_KEY= # desc=\"Server API credential\"\n");
+  await fs.writeFile(envPath, "\n");
+
+  let stdout = "";
+  let stderr = "";
+  const textExitCode = runCli(
+    ["--example", examplePath, "--env", envPath, "--show-descriptions"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(textExitCode, 1);
+  assert.equal(stderr, "");
+  assert.equal(stdout, `FAIL ${envPath}\n  missing: API_KEY - Server API credential\n`);
+
+  stdout = "";
+  stderr = "";
+  const jsonExitCode = runCli(
+    ["--example", examplePath, "--env", envPath, "--show-descriptions", "--format", "json"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(jsonExitCode, 1);
+  assert.equal(stderr, "");
+  assert.deepEqual(JSON.parse(stdout).files[0].descriptions, {
+    API_KEY: "Server API credential"
   });
 
   await fs.rm(tempDir, { recursive: true, force: true });

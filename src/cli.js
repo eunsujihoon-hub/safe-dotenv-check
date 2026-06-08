@@ -12,14 +12,16 @@ Usage:
   safe-dotenv-check --example .env.example --env .env.production --env-name production
   safe-dotenv-check --example .env.example --env .env --allow-extra
   safe-dotenv-check --example .env.example --env .env --format json
+  safe-dotenv-check --example .env.example --env .env --show-descriptions
 
 Options:
-  --example <path>    Manifest file, usually .env.example
-  --env <path>        Target .env file to verify, repeatable
-  --env-name <name>   Optional logical env name, once or once per --env
-  --allow-extra       Ignore keys that exist only in target files
-  --format <type>     Output format: text or json
-  --help              Show this message
+  --example <path>      Manifest file, usually .env.example
+  --env <path>          Target .env file to verify, repeatable
+  --env-name <name>     Optional logical env name, once or once per --env
+  --allow-extra         Ignore keys that exist only in target files
+  --show-descriptions   Include manifest desc/description text in reports
+  --format <type>       Output format: text or json
+  --help                Show this message
 
 Defaults:
   If omitted, --example defaults to .env.example and --env defaults to .env when those files exist.
@@ -69,7 +71,8 @@ export function runCli(argv, stdout, stderr) {
       const targetEntries = loadEnvFile(envPath);
       const result = compareEnv(exampleEntries, targetEntries, {
         allowExtra: parsed.allowExtra,
-        envName
+        envName,
+        includeDescriptions: parsed.showDescriptions
       });
       reports.push({
         file: envPath,
@@ -98,22 +101,22 @@ export function runCli(argv, stdout, stderr) {
 
         if (report.ok) {
           stdout.write(formatReportHeader("WARN", report));
-          writeList(stdout, "warn-missing", report.warnMissing);
-          writeList(stdout, "warn-empty", report.warnEmpty);
-          writeInvalidList(stdout, "warn-invalid", report.warnInvalid);
+          writeList(stdout, "warn-missing", report.warnMissing, report.descriptions);
+          writeList(stdout, "warn-empty", report.warnEmpty, report.descriptions);
+          writeInvalidList(stdout, "warn-invalid", report.warnInvalid, report.descriptions);
           continue;
         }
 
         stdout.write(formatReportHeader("FAIL", report));
-        writeList(stdout, "missing", report.missing);
-        writeList(stdout, "empty", report.empty);
-        writeInvalidList(stdout, "invalid", report.invalid);
-        writeList(stdout, "extra", report.extra);
-        writeList(stdout, "optional", report.optional);
-        writeList(stdout, "warning", report.warning);
-        writeList(stdout, "warn-missing", report.warnMissing);
-        writeList(stdout, "warn-empty", report.warnEmpty);
-        writeInvalidList(stdout, "warn-invalid", report.warnInvalid);
+        writeList(stdout, "missing", report.missing, report.descriptions);
+        writeList(stdout, "empty", report.empty, report.descriptions);
+        writeInvalidList(stdout, "invalid", report.invalid, report.descriptions);
+        writeList(stdout, "extra", report.extra, report.descriptions);
+        writeList(stdout, "optional", report.optional, report.descriptions);
+        writeList(stdout, "warning", report.warning, report.descriptions);
+        writeList(stdout, "warn-missing", report.warnMissing, report.descriptions);
+        writeList(stdout, "warn-empty", report.warnEmpty, report.descriptions);
+        writeInvalidList(stdout, "warn-invalid", report.warnInvalid, report.descriptions);
       }
     }
 
@@ -132,6 +135,7 @@ function parseArgs(argv) {
   let allowExtra = false;
   let format = "text";
   let help = false;
+  let showDescriptions = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -143,6 +147,11 @@ function parseArgs(argv) {
 
     if (arg === "--allow-extra") {
       allowExtra = true;
+      continue;
+    }
+
+    if (arg === "--show-descriptions") {
+      showDescriptions = true;
       continue;
     }
 
@@ -225,7 +234,8 @@ function parseArgs(argv) {
     envNames,
     examplePath,
     format,
-    help
+    help,
+    showDescriptions
   };
 }
 
@@ -266,15 +276,20 @@ function formatReportHeader(status, report) {
   return `${status} ${report.file}${report.envName ? ` (${report.envName})` : ""}\n`;
 }
 
-function writeList(stdout, label, values) {
+function writeList(stdout, label, values, descriptions = {}) {
   if (values.length > 0) {
-    stdout.write(`  ${label}: ${values.join(", ")}\n`);
+    stdout.write(`  ${label}: ${values.map((value) => formatKey(value, descriptions)).join(", ")}\n`);
   }
 }
 
-function writeInvalidList(stdout, label, values) {
+function writeInvalidList(stdout, label, values, descriptions = {}) {
   if (values.length > 0) {
-    const formatted = values.map((item) => `${item.key} (${item.expected})`).join(", ");
+    const formatted = values.map((item) => `${formatKey(item.key, descriptions)} (${item.expected})`).join(", ");
     stdout.write(`  ${label}: ${formatted}\n`);
   }
+}
+
+function formatKey(key, descriptions = {}) {
+  const description = descriptions[key];
+  return description ? `${key} - ${description}` : key;
 }

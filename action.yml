@@ -16,6 +16,10 @@ inputs:
     description: Set to true to ignore keys that exist only in target env files.
     required: false
     default: "false"
+  show_descriptions:
+    description: Set to true to include manifest desc/description text in reports.
+    required: false
+    default: "false"
   summary:
     description: Set to true to write a markdown summary to the GitHub Actions step summary.
     required: false
@@ -60,6 +64,10 @@ runs:
           args+=(--allow-extra)
         fi
 
+        if [ "${{ inputs.show_descriptions }}" = "true" ]; then
+          args+=(--show-descriptions)
+        fi
+
         set +e
         node "${GITHUB_ACTION_PATH}/bin/safe-dotenv-check.js" "${args[@]}" --format json >"${report_path}"
         status=$?
@@ -83,11 +91,26 @@ runs:
             const fs = require("node:fs");
             const report = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, "utf8"));
             const escapeCell = (value) => String(value).replace(/\|/g, "\\|").replace(/\n/g, "<br>");
+            const describedKeys = (item) => [
+              ...item.missing,
+              ...item.empty,
+              ...item.invalid.map((entry) => entry.key),
+              ...item.warnMissing,
+              ...item.warnEmpty,
+              ...item.warnInvalid.map((entry) => entry.key)
+            ];
+            const descriptions = (item) => {
+              if (!item.descriptions) return "-";
+              const values = [...new Set(describedKeys(item))]
+                .filter((key) => item.descriptions[key])
+                .map((key) => `${key}: ${item.descriptions[key]}`);
+              return values.length ? values.join(", ") : "-";
+            };
 
             process.stdout.write("## safe-dotenv-check\n\n");
             process.stdout.write(`Manifest: \`${escapeCell(report.example)}\`\n\n`);
-            process.stdout.write("| File | Env | Status | Missing | Empty | Invalid | Extra | Warn Missing | Warn Empty | Warn Invalid |\n");
-            process.stdout.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
+            process.stdout.write("| File | Env | Status | Missing | Empty | Invalid | Extra | Warn Missing | Warn Empty | Warn Invalid | Notes |\n");
+            process.stdout.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
 
             for (const item of report.files) {
               const hasWarnings = item.warnMissing.length > 0 || item.warnEmpty.length > 0 || item.warnInvalid.length > 0;
@@ -100,7 +123,7 @@ runs:
               const warnMissing = item.warnMissing.length ? item.warnMissing.join(", ") : "-";
               const warnEmpty = item.warnEmpty.length ? item.warnEmpty.join(", ") : "-";
               const warnInvalid = item.warnInvalid.length ? item.warnInvalid.map((entry) => `${entry.key} (${entry.expected})`).join(", ") : "-";
-              process.stdout.write(`| \`${escapeCell(item.file)}\` | \`${escapeCell(envName)}\` | ${status} | ${escapeCell(missing)} | ${escapeCell(empty)} | ${escapeCell(invalid)} | ${escapeCell(extra)} | ${escapeCell(warnMissing)} | ${escapeCell(warnEmpty)} | ${escapeCell(warnInvalid)} |\n`);
+              process.stdout.write(`| \`${escapeCell(item.file)}\` | \`${escapeCell(envName)}\` | ${status} | ${escapeCell(missing)} | ${escapeCell(empty)} | ${escapeCell(invalid)} | ${escapeCell(extra)} | ${escapeCell(warnMissing)} | ${escapeCell(warnEmpty)} | ${escapeCell(warnInvalid)} | ${escapeCell(descriptions(item))} |\n`);
             }
           ' >>"${GITHUB_STEP_SUMMARY}"
         fi

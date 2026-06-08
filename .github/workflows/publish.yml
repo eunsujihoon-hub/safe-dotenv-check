@@ -23,4 +23,4 @@ jobs:
       - run: node --version
       - run: npm test
       - run: npm run pack:check
-      - run: npm publish --access public
+      - run: npm publish --provenance --access public
