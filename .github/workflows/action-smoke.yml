@@ -38,8 +38,6 @@ jobs:
           test -f "${{ steps.env_check.outputs.report_path }}"
           test -f artifacts/report.json
           grep -q '"ok": true' artifacts/report.json
-          grep -q "## safe-dotenv-check" "${GITHUB_STEP_SUMMARY}"
-          grep -q "WARN" "${GITHUB_STEP_SUMMARY}"
   failure:
     runs-on: ubuntu-latest
     steps:
@@ -78,5 +76,3 @@ jobs:
           grep -q '"API_KEY"' artifacts/failing-report.json
           grep -q '"API_KEY": "Server API credential"' artifacts/failing-report.json
           grep -q '"expected": "type=url"' artifacts/failing-report.json
-          grep -q "FAIL" "${GITHUB_STEP_SUMMARY}"
-          grep -q "Server API credential" "${GITHUB_STEP_SUMMARY}"

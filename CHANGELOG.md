@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.4 - 2026-06-08
+
+- fix the action smoke workflow so it no longer reads a per-step GitHub summary file from a later assertion step
+- keep the description-reporting feature and provenance publish settings from 1.2.3 as the latest release
+
 ## 1.2.3 - 2026-06-08
 
 - add `--show-descriptions` so CLI text and JSON reports can include manifest `desc=`/`description=` context
