@@ -25,12 +25,14 @@ jobs:
 
           cat <<'EOF' > .env.ci
           DATABASE_URL=postgres://localhost/app
+          CI_ONLY=true
           EOF
       - uses: ./
         id: env_check
         with:
           example: .env.example
           env_files: .env.ci
+          extra: warn
           json_output_path: artifacts/report.json
       - name: Assert outputs and artifacts
         run: |
@@ -38,6 +40,8 @@ jobs:
           test -f "${{ steps.env_check.outputs.report_path }}"
           test -f artifacts/report.json
           grep -q '"ok": true' artifacts/report.json
+          grep -q '"warnExtra": \[' artifacts/report.json
+          grep -q '"CI_ONLY"' artifacts/report.json
   failure:
     runs-on: ubuntu-latest
     steps:
@@ -76,3 +80,4 @@ jobs:
           grep -q '"API_KEY"' artifacts/failing-report.json
           grep -q '"API_KEY": "Server API credential"' artifacts/failing-report.json
           grep -q '"expected": "type=url"' artifacts/failing-report.json
+          ! grep -q '"value": "not-a-url"' artifacts/failing-report.json

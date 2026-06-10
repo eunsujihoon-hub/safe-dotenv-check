@@ -10,7 +10,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v6
@@ -24,3 +24,14 @@ jobs:
       - run: npm test
       - run: npm run pack:check
       - run: npm publish --provenance --access public
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release edit "${TAG_NAME}" --latest --draft=false --prerelease=false
+          else
+            gh release create "${TAG_NAME}" --title "${TAG_NAME}" --generate-notes --latest
+          fi

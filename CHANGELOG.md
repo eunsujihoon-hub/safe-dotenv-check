@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0 - 2026-06-10
+
+- add `--extra fail|warn|ignore` so teams can adopt extra-key checks gradually while keeping `--allow-extra` as a compatibility alias
+- add next-action suggestions to CLI text output and JSON reports
+- add `--redact-values` and make the GitHub Action redact invalid raw values by default
+- add `--init`, `--preset`, and `--sync-example` helpers for creating and maintaining `.env.example` files
+- add `--doctor` / `--explain` manifest linting for invalid regex patterns, unknown types, empty enums, and confusing descriptions
+- improve description parsing when an unquoted description is followed by another directive
+- replace the wide GitHub Action summary table with per-file sections
+- automatically create or update the GitHub Release after a successful tagged publish
+- ignore npm tarball artifacts and update setup docs to the latest action version
+
 ## 1.2.4 - 2026-06-08
 
 - fix the action smoke workflow so it no longer reads a per-step GitHub summary file from a later assertion step

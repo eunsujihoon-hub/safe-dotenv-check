@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.2
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.3.0
         with:
           example: .env.example
           env_files: .env.ci
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.2
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.3.0
         with:
           example: .env.example
           env_files: |
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.2
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.3.0
         with:
           example: .env.example
           env_files: .env.production
@@ -71,6 +71,38 @@ jobs:
 ```
 
 That report is plain JSON, so you can upload it as an artifact or inspect it in a later step.
+The action redacts invalid raw values from JSON by default so reports are safer to keep as artifacts.
+
+## Adopt gradually with extra-key warnings
+
+If an existing project has target env files with extra keys that are not in the manifest yet, start with warnings instead of blocking the job:
+
+```yaml
+jobs:
+  env-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.3.0
+        with:
+          example: .env.example
+          env_files: .env.production
+          env_names: production
+          extra: warn
+```
+
+Use `extra: fail` once the manifest is fully synced, or `extra: ignore` when those keys are intentionally outside the contract.
+
+## Show key descriptions
+
+If your manifest uses `desc=` or `description=`, include those notes in the JSON report and step summary:
+
+```yaml
+with:
+  example: .env.example
+  env_files: .env.production
+  show_descriptions: true
+```
 
 ## Good manifest habits for CI
 
@@ -79,6 +111,7 @@ That report is plain JSON, so you can upload it as an artifact or inspect it in 
 - mark non-blocking integrations as warning-only
 - use `type=`, `enum=`, and `pattern=` for obviously wrong values
 - use `env=` when the same key has different rules in `dev`, `ci`, and `production`
+- keep `redact_values` enabled unless you have a specific reason to store invalid raw values
 
 ## Related
 

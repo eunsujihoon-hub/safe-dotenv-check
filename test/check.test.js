@@ -406,7 +406,11 @@ test("runCli supports json output", async () => {
         warnMissing: [],
         warnEmpty: [],
         warnInvalid: [],
-        ok: false
+        ok: false,
+        actions: [
+          `add API_KEY to ${envPath}`,
+          "remove OTHER_KEY from the target env file, add it to the manifest, or use --extra warn/ignore"
+        ]
       }
     ]
   });
@@ -436,7 +440,11 @@ test("runCli can show descriptions in text and json output", async () => {
 
   assert.equal(textExitCode, 1);
   assert.equal(stderr, "");
-  assert.equal(stdout, `FAIL ${envPath}\n  missing: API_KEY - Server API credential\n`);
+  assert.equal(stdout, `FAIL ${envPath}
+  missing: API_KEY - Server API credential
+  next:
+    - add API_KEY to ${envPath}
+`);
 
   stdout = "";
   stderr = "";
@@ -523,7 +531,11 @@ test("runCli applies env-specific manifest entries and includes envName in json 
         warnEmpty: [],
         warnInvalid: [],
         envName: "production",
-        ok: false
+        ok: false,
+        actions: [
+          `add API_KEY to ${envPath}`,
+          "remove OTHER_KEY from the target env file, add it to the manifest, or use --extra warn/ignore"
+        ]
       }
     ]
   });
@@ -569,7 +581,11 @@ test("runCli treats positional arguments as env paths and infers env names", asy
         warnEmpty: [],
         warnInvalid: [],
         envName: "production",
-        ok: false
+        ok: false,
+        actions: [
+          `add API_KEY to ${envPath}`,
+          "remove OTHER_KEY from the target env file, add it to the manifest, or use --extra warn/ignore"
+        ]
       }
     ]
   });
@@ -658,7 +674,11 @@ test("runCli prints warning-only findings without failing", async () => {
 
   assert.equal(exitCode, 0);
   assert.equal(stderr, "");
-  assert.equal(stdout, `WARN ${envPath}\n  warn-missing: SLACK_WEBHOOK_URL\n`);
+  assert.equal(stdout, `WARN ${envPath}
+  warn-missing: SLACK_WEBHOOK_URL
+  next:
+    - optionally add warning-only key SLACK_WEBHOOK_URL
+`);
 
   await fs.rm(tempDir, { recursive: true, force: true });
 });
@@ -685,7 +705,135 @@ test("runCli prints invalid schema details", async () => {
 
   assert.equal(exitCode, 1);
   assert.equal(stderr, "");
-  assert.equal(stdout, `FAIL ${envPath}\n  invalid: PORT (type=int)\n`);
+  assert.equal(stdout, `FAIL ${envPath}
+  invalid: PORT (type=int)
+  next:
+    - update PORT to match type=int
+`);
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli supports warn extra mode without failing", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const envPath = path.join(tempDir, ".env");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(envPath, "API_KEY=test\nEXTRA_KEY=1\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--example", examplePath, "--env", envPath, "--extra", "warn"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(stdout, `WARN ${envPath}
+  warn-extra: EXTRA_KEY
+  next:
+    - review extra key EXTRA_KEY; add it to the manifest if it is intentional
+`);
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli can redact invalid values from json output", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const envPath = path.join(tempDir, ".env");
+
+  await fs.writeFile(examplePath, "API_KEY= # pattern=^sk-[a-z0-9]+$\n");
+  await fs.writeFile(envPath, "API_KEY=secret-value\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--example", examplePath, "--env", envPath, "--format", "json", "--redact-values"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 1);
+  assert.equal(stderr, "");
+  assert.deepEqual(JSON.parse(stdout).files[0].invalid, [
+    { key: "API_KEY", expected: "pattern=^sk-[a-z0-9]+$" }
+  ]);
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli can initialize and sync example files", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const envPath = path.join(tempDir, ".env.local");
+  const examplePath = path.join(tempDir, ".env.example");
+
+  await fs.writeFile(envPath, "DATABASE_URL=postgres://local\nAPI_KEY=secret\n");
+
+  let stdout = "";
+  let stderr = "";
+  const initExitCode = runCli(
+    ["--init", "--env", envPath, "--out", examplePath],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(initExitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(await fs.readFile(examplePath, "utf8"), "API_KEY=\nDATABASE_URL=\n");
+
+  await fs.writeFile(envPath, "DATABASE_URL=postgres://local\nAPI_KEY=secret\nNEW_KEY=value\n");
+  stdout = "";
+  stderr = "";
+  const syncExitCode = runCli(
+    ["--sync-example", "--example", examplePath, "--env", envPath, "--write"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(syncExitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(await fs.readFile(examplePath, "utf8"), "API_KEY=\nDATABASE_URL=\nNEW_KEY=\n");
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli doctor reports invalid manifest directives", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+
+  await fs.writeFile(examplePath, "API_KEY= # pattern=[\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--doctor", "--example", examplePath],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 1);
+  assert.equal(stderr, "");
+  assert.match(stdout, /invalid regex pattern/);
 
   await fs.rm(tempDir, { recursive: true, force: true });
 });

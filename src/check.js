@@ -76,6 +76,125 @@ export function parseExampleFile(content) {
   };
 }
 
+export function generateExampleFromEnv(targetEntries, options = {}) {
+  const presetEntries = getPresetEntries(options.preset);
+  const keys = new Set([...presetEntries, ...targetEntries.keys()]);
+  return [...keys]
+    .sort()
+    .map((key) => `${key}=`)
+    .join("\n") + "\n";
+}
+
+export function syncExampleContent(exampleContent, targetEntries) {
+  const example = parseExampleFile(exampleContent);
+  const existingKeys = new Set(example.entries.map((entry) => entry.key));
+  const missingKeys = [...targetEntries.keys()]
+    .filter((key) => !existingKeys.has(key))
+    .sort();
+
+  if (missingKeys.length === 0) {
+    return {
+      added: [],
+      content: exampleContent
+    };
+  }
+
+  const suffix = exampleContent.endsWith("\n") ? "" : "\n";
+  return {
+    added: missingKeys,
+    content: `${exampleContent}${suffix}${missingKeys.map((key) => `${key}=`).join("\n")}\n`
+  };
+}
+
+export function lintExampleFile(content) {
+  const findings = [];
+
+  for (const [lineIndex, rawLine] of content.split(/\r?\n/).entries()) {
+    const lineNumber = lineIndex + 1;
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const withoutExport = line.startsWith("export ") ? line.slice(7) : line;
+    const normalizedLine = withoutExport
+      .replace(/^\?/, "")
+      .replace(/^!/, "");
+    const separatorIndex = normalizedLine.indexOf("=");
+    const key = separatorIndex === -1
+      ? normalizedLine.trim()
+      : normalizedLine.slice(0, separatorIndex).trim();
+
+    if (!key) {
+      findings.push({
+        line: lineNumber,
+        level: "warning",
+        message: "empty key is ignored"
+      });
+      continue;
+    }
+
+    const rawValue = separatorIndex === -1 ? "" : normalizedLine.slice(separatorIndex + 1).trim();
+    const { comment } = splitValueAndComment(rawValue);
+    const tokens = tokenizeDirectiveComment(comment);
+
+    for (const token of tokens) {
+      if (/^type=/i.test(token) && !/^type=(string|int|integer|number|boolean|url|json)$/i.test(token)) {
+        findings.push({
+          line: lineNumber,
+          key,
+          level: "warning",
+          message: `unknown type directive: ${token}`
+        });
+      }
+
+      if (/^pattern=/i.test(token)) {
+        const pattern = token.replace(/^pattern=/i, "");
+        try {
+          new RegExp(pattern);
+        } catch {
+          findings.push({
+            line: lineNumber,
+            key,
+            level: "error",
+            message: `invalid regex pattern: ${pattern}`
+          });
+        }
+      }
+
+      if (/^enum=/i.test(token)) {
+        const values = token.replace(/^enum=/i, "").split("|").map((item) => item.trim()).filter(Boolean);
+        if (values.length === 0) {
+          findings.push({
+            line: lineNumber,
+            key,
+            level: "warning",
+            message: "enum directive has no values"
+          });
+        }
+      }
+    }
+
+    const descriptionToken = tokens.find((token) => /^(?:desc|description)=/i.test(token));
+    if (descriptionToken && !/^(?:desc|description)=["'].*["']$/i.test(descriptionToken)) {
+      const descriptionIndex = tokens.indexOf(descriptionToken);
+      if (tokens.slice(descriptionIndex + 1).some(isKnownDirectiveToken)) {
+        findings.push({
+          line: lineNumber,
+          key,
+          level: "warning",
+          message: "quote desc/description when another directive follows it"
+        });
+      }
+    }
+  }
+
+  return {
+    ok: findings.every((finding) => finding.level !== "error"),
+    findings
+  };
+}
+
 function stripWrappingQuotes(value) {
   if (value.length >= 2) {
     const first = value[0];
@@ -153,6 +272,7 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
   const warnEmpty = [];
   const invalid = [];
   const warnInvalid = [];
+  const extraMode = options.extraMode ?? (options.allowExtra ? "ignore" : "fail");
 
   for (const key of requiredKeys) {
     if (!targetKeys.has(key)) {
@@ -169,7 +289,8 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
       key,
       targetEntries.get(key),
       exampleSpec.requiredEntries.get(key)?.rules,
-      exampleSpec.requiredEntries.get(key)?.description
+      exampleSpec.requiredEntries.get(key)?.description,
+      options.redactValues
     );
     if (failure) {
       invalid.push(failure);
@@ -191,7 +312,8 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
       key,
       targetEntries.get(key),
       exampleSpec.warningEntries.get(key)?.rules,
-      exampleSpec.warningEntries.get(key)?.description
+      exampleSpec.warningEntries.get(key)?.description,
+      options.redactValues
     );
     if (failure) {
       warnInvalid.push(failure);
@@ -211,16 +333,17 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
       key,
       targetEntries.get(key),
       exampleSpec.optionalEntries.get(key)?.rules,
-      exampleSpec.optionalEntries.get(key)?.description
+      exampleSpec.optionalEntries.get(key)?.description,
+      options.redactValues
     );
     if (failure) {
       invalid.push(failure);
     }
   }
 
-  const extra = options.allowExtra
-    ? []
-    : [...targetKeys].filter((key) => !exampleSpec.allEntries.has(key)).sort();
+  const discoveredExtra = [...targetKeys].filter((key) => !exampleSpec.allEntries.has(key)).sort();
+  const extra = extraMode === "fail" ? discoveredExtra : [];
+  const warnExtra = extraMode === "warn" ? discoveredExtra : [];
 
   const report = {
     missing,
@@ -235,6 +358,18 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
     ok: missing.length === 0 && empty.length === 0 && invalid.length === 0 && extra.length === 0
   };
 
+  if (options.file) {
+    report.file = options.file;
+  }
+
+  if (extraMode === "warn") {
+    report.warnExtra = warnExtra;
+  }
+
+  if (options.includeActions) {
+    report.actions = buildActions(report);
+  }
+
   if (options.includeDescriptions) {
     report.descriptions = buildDescriptions(exampleSpec.allEntries);
   }
@@ -244,6 +379,19 @@ export function compareEnv(exampleEntries, targetEntries, options = {}) {
   }
 
   return report;
+}
+
+function buildActions(report) {
+  return [
+    ...report.missing.map((key) => `add ${key} to ${report.file ?? "the target env file"}`),
+    ...report.empty.map((key) => `set a non-empty value for ${key}`),
+    ...report.invalid.map((item) => `update ${item.key} to match ${item.expected}`),
+    ...report.extra.map((key) => `remove ${key} from the target env file, add it to the manifest, or use --extra warn/ignore`),
+    ...(report.warnExtra ?? []).map((key) => `review extra key ${key}; add it to the manifest if it is intentional`),
+    ...report.warnMissing.map((key) => `optionally add warning-only key ${key}`),
+    ...report.warnEmpty.map((key) => `optionally set warning-only key ${key}`),
+    ...report.warnInvalid.map((item) => `optionally update ${item.key} to match ${item.expected}`)
+  ];
 }
 
 function buildDescriptions(entries) {
@@ -473,8 +621,14 @@ function parseDescriptionFromTokens(tokens) {
 
   const token = tokens[descriptionIndex];
   const rawValue = token.replace(/^(?:desc|description)=/i, "");
-  const remainder = tokens.slice(descriptionIndex + 1);
+  const remainder = tokens
+    .slice(descriptionIndex + 1)
+    .filter((item) => !isKnownDirectiveToken(item));
   return normalizeDescriptionValue([rawValue, ...remainder].join(" ").trim());
+}
+
+function isKnownDirectiveToken(token) {
+  return /^(?:optional|warn(?:ing)?|type=|enum=|pattern=|env=)/i.test(token);
 }
 
 function normalizeDescriptionValue(value) {
@@ -489,45 +643,76 @@ function normalizeDescriptionValue(value) {
   return value.trim();
 }
 
-function validateValueAgainstRules(key, value, rules = {}, description = "") {
+function validateValueAgainstRules(key, value, rules = {}, description = "", redactValue = false) {
   if (!rules || Object.keys(rules).length === 0) {
     return null;
   }
 
   if (rules.type && !matchesType(value, rules.type)) {
-    return buildValidationFailure(key, value, `type=${rules.type}`, description);
+    return buildValidationFailure(key, value, `type=${rules.type}`, description, redactValue);
   }
 
   if (rules.enum && !rules.enum.includes(value)) {
-    return buildValidationFailure(key, value, `enum=${rules.enum.join("|")}`, description);
+    return buildValidationFailure(key, value, `enum=${rules.enum.join("|")}`, description, redactValue);
   }
 
   if (rules.pattern) {
     try {
       const expression = new RegExp(rules.pattern);
       if (!expression.test(value)) {
-        return buildValidationFailure(key, value, `pattern=${rules.pattern}`, description);
+        return buildValidationFailure(key, value, `pattern=${rules.pattern}`, description, redactValue);
       }
     } catch {
-      return buildValidationFailure(key, value, `pattern=${rules.pattern}`, description);
+      return buildValidationFailure(key, value, `pattern=${rules.pattern}`, description, redactValue);
     }
   }
 
   return null;
 }
 
-function buildValidationFailure(key, value, expected, description) {
+function buildValidationFailure(key, value, expected, description, redactValue = false) {
   const failure = {
     key,
-    value,
     expected
   };
+
+  if (!redactValue) {
+    failure.value = value;
+  }
 
   if (description) {
     failure.description = description;
   }
 
   return failure;
+}
+
+function getPresetEntries(preset = "") {
+  switch (preset) {
+    case "":
+    case "none":
+      return [];
+    case "nextjs":
+      return [
+        "DATABASE_URL",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_API_BASE_URL",
+        "NODE_ENV"
+      ];
+    case "vite":
+      return [
+        "VITE_API_BASE_URL",
+        "NODE_ENV"
+      ];
+    case "node":
+      return [
+        "DATABASE_URL",
+        "NODE_ENV",
+        "PORT"
+      ];
+    default:
+      return [];
+  }
 }
 
 function matchesEnv(entryEnvs = [], envName = "") {

@@ -15,6 +15,8 @@ It gives you:
 - environment-specific contracts like `env=production`
 - plain CLI output plus JSON output for CI
 - optional descriptions in reports when a key needs context
+- next-action suggestions for common failures
+- starter manifest generation and manifest sync helpers
 - a reusable GitHub Action for repo-level env checks
 
 Quick start:
@@ -124,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.2.4
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.3.0
         with:
           example: .env.example
           env_files: |
@@ -140,8 +142,10 @@ Inputs:
 - `example`: manifest path such as `.env.example`
 - `env_files`: newline-separated target env file paths
 - `env_names`: optional newline-separated logical env names, once or once per env file
-- `allow_extra`: set to `true` to ignore keys that exist only in target files
+- `extra`: how to handle keys that exist only in target files: `fail`, `warn`, or `ignore`
+- `allow_extra`: legacy alias for `extra: ignore`
 - `show_descriptions`: set to `true` to include manifest `desc=`/`description=` text in reports
+- `redact_values`: set to `false` only if JSON reports should include invalid raw values
 - `summary`: set to `false` to skip step summary output
 - `json_output_path`: optional path where the JSON report should be copied
 
@@ -158,8 +162,13 @@ safe-dotenv-check --example .env.example --env .env
 safe-dotenv-check --example .env.example --env .env --env .env.production
 safe-dotenv-check --example .env.example --env .env.production --env-name production
 safe-dotenv-check --example .env.example --env .env --allow-extra
+safe-dotenv-check --example .env.example --env .env --extra warn
 safe-dotenv-check --example .env.example --env .env --format json
+safe-dotenv-check --example .env.example --env .env --format json --redact-values
 safe-dotenv-check --example .env.example --env .env --show-descriptions
+safe-dotenv-check --init --env .env.local --out .env.example
+safe-dotenv-check --sync-example --example .env.example --env .env.local
+safe-dotenv-check --doctor --example .env.example
 ```
 
 If you do not pass `--env-name`, the CLI also infers names from files such as `.env.production` and `.env.staging.local`.
@@ -167,8 +176,67 @@ If you do not pass `--env-name`, the CLI also infers names from files such as `.
 ## Exit codes
 
 - `0`: all files passed
-- `1`: at least one file has missing or empty required keys, or unexpected extra keys when `--allow-extra` is not set
+- `1`: at least one file has missing or empty required keys, invalid values, or unexpected extra keys when `--extra fail` is active
 - `2`: invalid CLI usage or unreadable files
+
+## Starter and sync helpers
+
+If a project already has a local env file but no useful manifest yet, generate a starter `.env.example` with values removed:
+
+```bash
+safe-dotenv-check --init --env .env.local --out .env.example
+```
+
+The command refuses to overwrite an existing output file unless you pass `--force`.
+
+You can also ask the CLI which keys from a target env file are missing in the manifest:
+
+```bash
+safe-dotenv-check --sync-example --example .env.example --env .env.local
+```
+
+By default this prints a dry-run list. Add `--write` to append missing keys to `.env.example`.
+
+For common projects, `--init` can add a small starter set:
+
+```bash
+safe-dotenv-check --init --env .env.local --out .env.example --preset nextjs
+safe-dotenv-check --init --env .env --out .env.example --preset vite
+safe-dotenv-check --init --env .env --out .env.example --preset node
+```
+
+## Extra key modes
+
+Unexpected keys fail by default because drift is usually worth catching:
+
+```bash
+safe-dotenv-check --example .env.example --env .env.production
+```
+
+For gradual adoption, report extra keys without failing:
+
+```bash
+safe-dotenv-check --example .env.example --env .env.production --extra warn
+```
+
+To ignore extra keys entirely, use either form:
+
+```bash
+safe-dotenv-check --example .env.example --env .env.production --extra ignore
+safe-dotenv-check --example .env.example --env .env.production --allow-extra
+```
+
+Supported modes are `fail`, `warn`, and `ignore`.
+
+## Manifest doctor
+
+Use `--doctor` to lint the manifest itself:
+
+```bash
+safe-dotenv-check --doctor --example .env.example
+```
+
+It catches confusing or broken directives such as invalid regex patterns, unknown `type=` values, empty enums, and unquoted descriptions followed by more directives.
 
 ## Manifest tiers
 
@@ -343,7 +411,12 @@ FAIL .env.production
   empty: DATABASE_URL
   invalid: PORT (type=int), NODE_ENV (enum=development|staging|production)
   extra: DEBUG
+  next:
+    - add OPENAI_API_KEY to .env.production
+    - set a non-empty value for DATABASE_URL
+    - remove DEBUG from the target env file, add it to the manifest, or use --extra warn/ignore
 WARN .env.staging
+  warn-extra: LOCAL_ONLY
   warn-missing: SLACK_WEBHOOK_URL
   warn-empty: OTEL_EXPORTER_OTLP_ENDPOINT
   warn-invalid: OTEL_EXPORTER_OTLP_ENDPOINT (type=url)
@@ -355,6 +428,12 @@ If this is feeding another script or CI step, use JSON:
 
 ```bash
 safe-dotenv-check --example .env.example --env .env --format json
+```
+
+If the JSON report will be uploaded as a CI artifact, prefer redaction so invalid raw values are not stored:
+
+```bash
+safe-dotenv-check --example .env.example --env .env --format json --redact-values
 ```
 
 ```json
@@ -449,7 +528,6 @@ Commit only redacted examples such as `.env.example`. Do not commit real credent
 ## Roadmap
 
 - generated env reference docs from the manifest
-- stricter controls for unexpected extra keys
 - platform adapters for GitHub Actions secrets and hosted deploy platforms
 
 ## Contributing
