@@ -31,6 +31,7 @@ Options:
   --allow-extra         Alias for --extra ignore
   --show-descriptions   Include manifest desc/description text in reports
   --redact-values       Omit invalid raw values from JSON reports
+  --quiet               In text mode, print only failing or warning reports
   --no-suggestions      Hide next-action suggestions in text output
   --format <type>       Output format: text or json
   --init                Generate a starter .env.example from an env file
@@ -211,6 +212,7 @@ function parseArgs(argv) {
   let init = false;
   let outPath = "";
   let preset = "none";
+  let quiet = false;
   let redactValues = false;
   let showDescriptions = false;
   let showSuggestions = true;
@@ -244,6 +246,11 @@ function parseArgs(argv) {
 
     if (arg === "--redact-values") {
       redactValues = true;
+      continue;
+    }
+
+    if (arg === "--quiet" || arg === "-q") {
+      quiet = true;
       continue;
     }
 
@@ -362,6 +369,7 @@ function parseArgs(argv) {
         init,
         outPath,
         preset,
+        quiet,
         redactValues,
         showDescriptions,
         showSuggestions,
@@ -387,6 +395,7 @@ function parseArgs(argv) {
         init,
         outPath,
         preset,
+        quiet,
         redactValues,
         showDescriptions,
         showSuggestions,
@@ -419,6 +428,7 @@ function parseArgs(argv) {
       init,
       outPath,
       preset,
+      quiet,
       redactValues,
       showDescriptions,
       showSuggestions,
@@ -487,6 +497,10 @@ function inferEnvNameFromPath(envPath) {
 
 function writeTextReport(stdout, report, parsed) {
   const hasWarnings = hasWarningFindings(report);
+
+  if (parsed.quiet && report.ok && !hasWarnings) {
+    return;
+  }
 
   if (report.ok && !hasWarnings) {
     stdout.write(formatReportHeader("PASS", report));

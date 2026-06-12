@@ -652,6 +652,39 @@ test("runCli supports allow-extra for success paths", async () => {
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 
+test("runCli quiet mode hides clean text reports but keeps warnings", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const examplePath = path.join(tempDir, ".env.example");
+  const cleanEnvPath = path.join(tempDir, ".env.clean");
+  const warnEnvPath = path.join(tempDir, ".env.warn");
+
+  await fs.writeFile(examplePath, "DATABASE_URL=\n!SLACK_WEBHOOK_URL=\n");
+  await fs.writeFile(cleanEnvPath, "DATABASE_URL=postgres://local\nSLACK_WEBHOOK_URL=https://hooks.example.com\n");
+  await fs.writeFile(warnEnvPath, "DATABASE_URL=postgres://local\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--example", examplePath, "--env", cleanEnvPath, "--env", warnEnvPath, "--quiet"],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(stdout, `WARN ${warnEnvPath} (warn)
+  warn-missing: SLACK_WEBHOOK_URL
+  next:
+    - optionally add warning-only key SLACK_WEBHOOK_URL
+`);
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
 test("runCli prints warning-only findings without failing", async () => {
   const fs = await import("node:fs/promises");
   const os = await import("node:os");

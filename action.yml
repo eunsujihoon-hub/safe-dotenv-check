@@ -1,6 +1,10 @@
 name: safe-dotenv-check
 description: Validate one or more .env files against a .env.example-style manifest.
 
+branding:
+  icon: check-circle
+  color: green
+
 inputs:
   example:
     description: Path to the manifest file, usually .env.example.

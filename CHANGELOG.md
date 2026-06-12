@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 - 2026-06-12
+
+- tighten the README so the first screen explains the problem, value, quick start, and failure output faster
+- add npm, Node, and CodeQL badges for stronger GitHub and npm trust signals
+- add focused examples for Next.js, GitHub Actions, and monorepo adoption
+- add a release checklist for repeatable npm package and GitHub Action publishing
+- add GitHub Marketplace branding to the Action
+- add `--quiet` / `-q` text output mode for CI logs that should show only failures and warnings
+
 ## 1.3.0 - 2026-06-10
 
 - add `--extra fail|warn|ignore` so teams can adopt extra-key checks gradually while keeping `--allow-extra` as a compatibility alias
