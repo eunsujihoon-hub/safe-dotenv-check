@@ -108,6 +108,7 @@ export function syncExampleContent(exampleContent, targetEntries) {
 
 export function lintExampleFile(content) {
   const findings = [];
+  const seenKeys = new Map();
 
   for (const [lineIndex, rawLine] of content.split(/\r?\n/).entries()) {
     const lineNumber = lineIndex + 1;
@@ -137,6 +138,19 @@ export function lintExampleFile(content) {
     const rawValue = separatorIndex === -1 ? "" : normalizedLine.slice(separatorIndex + 1).trim();
     const { comment } = splitValueAndComment(rawValue);
     const tokens = tokenizeDirectiveComment(comment);
+    const envs = getEnvDirectiveValues(tokens);
+    const duplicate = findOverlappingEntry(seenKeys.get(key) ?? [], envs);
+
+    if (duplicate) {
+      findings.push({
+        line: lineNumber,
+        key,
+        level: "warning",
+        message: `duplicate key overlaps with line ${duplicate.line}; later entry wins`
+      });
+    }
+
+    seenKeys.set(key, [...(seenKeys.get(key) ?? []), { line: lineNumber, envs }]);
 
     for (const token of tokens) {
       if (/^type=/i.test(token) && !/^type=(string|int|integer|number|boolean|url|json)$/i.test(token)) {
@@ -193,6 +207,31 @@ export function lintExampleFile(content) {
     ok: findings.every((finding) => finding.level !== "error"),
     findings
   };
+}
+
+function getEnvDirectiveValues(tokens) {
+  const envToken = tokens.find((token) => /^env=/i.test(token));
+  if (!envToken) {
+    return [];
+  }
+
+  return envToken
+    .replace(/^env=/i, "")
+    .split(/[|,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function findOverlappingEntry(entries, envs) {
+  return entries.find((entry) => envScopesOverlap(entry.envs, envs));
+}
+
+function envScopesOverlap(left = [], right = []) {
+  if (left.length === 0 || right.length === 0) {
+    return true;
+  }
+
+  return left.some((item) => right.includes(item));
 }
 
 function stripWrappingQuotes(value) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1 - 2026-06-15
+
+- reject missing values for option flags such as `--example`, `--env`, `--format`, `--extra`, `--preset`, and `--out` before file validation runs
+- fix `--init --out` without a value so it reports a clear usage error instead of falling back to `.env.example`
+- warn in `--doctor` when duplicate manifest keys overlap and the later entry will win
+
 ## 1.4.0 - 2026-06-12
 
 - tighten the README so the first screen explains the problem, value, quick start, and failure output faster

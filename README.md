@@ -39,7 +39,7 @@ FAIL .env.production (production)
 - extra keys in target env files: fail, warn, or ignore
 - value shape with `type=`, `enum=`, and `pattern=`
 - env-specific contracts such as `env=production`
-- manifest mistakes with `--doctor`
+- manifest mistakes and overlapping duplicate keys with `--doctor`
 
 ## Install
 
@@ -146,7 +146,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.4.0
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.4.1
         with:
           example: .env.example
           env_files: |

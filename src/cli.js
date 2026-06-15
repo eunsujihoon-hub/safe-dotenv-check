@@ -234,8 +234,12 @@ function parseArgs(argv) {
     }
 
     if (arg === "--extra") {
-      extraMode = argv[index + 1] ?? "";
-      index += 1;
+      const value = readOptionValue(argv, index, arg);
+      if (value.error) {
+        return value;
+      }
+      extraMode = value.value;
+      index = value.nextIndex;
       continue;
     }
 
@@ -285,40 +289,62 @@ function parseArgs(argv) {
     }
 
     if (arg === "--format") {
-      format = argv[index + 1] ?? "";
-      index += 1;
+      const value = readOptionValue(argv, index, arg);
+      if (value.error) {
+        return value;
+      }
+      format = value.value;
+      index = value.nextIndex;
       continue;
     }
 
     if (arg === "--example") {
-      examplePath = argv[index + 1] ?? "";
-      index += 1;
+      const value = readOptionValue(argv, index, arg);
+      if (value.error) {
+        return value;
+      }
+      examplePath = value.value;
+      index = value.nextIndex;
       continue;
     }
 
     if (arg === "--env") {
-      const envPath = argv[index + 1] ?? "";
-      envPaths.push(envPath);
-      index += 1;
+      const value = readOptionValue(argv, index, arg);
+      if (value.error) {
+        return value;
+      }
+      envPaths.push(value.value);
+      index = value.nextIndex;
       continue;
     }
 
     if (arg === "--env-name") {
-      const envName = argv[index + 1] ?? "";
-      envNames.push(envName);
-      index += 1;
+      const value = readOptionValue(argv, index, arg);
+      if (value.error) {
+        return value;
+      }
+      envNames.push(value.value);
+      index = value.nextIndex;
       continue;
     }
 
     if (arg === "--out") {
-      outPath = argv[index + 1] ?? "";
-      index += 1;
+      const value = readOptionValue(argv, index, arg);
+      if (value.error) {
+        return value;
+      }
+      outPath = value.value;
+      index = value.nextIndex;
       continue;
     }
 
     if (arg === "--preset") {
-      preset = argv[index + 1] ?? "";
-      index += 1;
+      const value = readOptionValue(argv, index, arg);
+      if (value.error) {
+        return value;
+      }
+      preset = value.value;
+      index = value.nextIndex;
       continue;
     }
 
@@ -439,6 +465,19 @@ function parseArgs(argv) {
 
   return {
     help
+  };
+}
+
+function readOptionValue(argv, index, option) {
+  const value = argv[index + 1];
+
+  if (!value || value.startsWith("-")) {
+    return { error: `missing value for ${option}` };
+  }
+
+  return {
+    value,
+    nextIndex: index + 1
   };
 }
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compareEnv, parseEnvFile, parseExampleFile } from "../src/check.js";
+import { compareEnv, lintExampleFile, parseEnvFile, parseExampleFile } from "../src/check.js";
 import { runCli } from "../src/cli.js";
 
 test("parseEnvFile ignores comments and export prefixes", () => {
@@ -625,6 +625,22 @@ test("runCli rejects mismatched env-name counts", async () => {
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 
+test("runCli rejects missing option values before validation", async () => {
+  for (const option of ["--example", "--env", "--env-name", "--extra", "--format", "--out", "--preset"]) {
+    let stdout = "";
+    let stderr = "";
+    const exitCode = runCli(
+      [option, "--doctor"],
+      { write(chunk) { stdout += chunk; } },
+      { write(chunk) { stderr += chunk; } }
+    );
+
+    assert.equal(exitCode, 2);
+    assert.equal(stdout, "");
+    assert.match(stderr, new RegExp(`missing value for ${option}`));
+  }
+});
+
 test("runCli supports allow-extra for success paths", async () => {
   const fs = await import("node:fs/promises");
   const os = await import("node:os");
@@ -869,4 +885,31 @@ test("runCli doctor reports invalid manifest directives", async () => {
   assert.match(stdout, /invalid regex pattern/);
 
   await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("lintExampleFile warns about overlapping duplicate keys", () => {
+  const result = lintExampleFile(`
+API_KEY=
+API_KEY= # optional
+SENTRY_DSN= # env=production
+?SENTRY_DSN= # env=dev
+SLACK_WEBHOOK_URL= # env=staging,production
+!SLACK_WEBHOOK_URL= # env=production
+`);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.findings, [
+    {
+      line: 3,
+      key: "API_KEY",
+      level: "warning",
+      message: "duplicate key overlaps with line 2; later entry wins"
+    },
+    {
+      line: 7,
+      key: "SLACK_WEBHOOK_URL",
+      level: "warning",
+      message: "duplicate key overlaps with line 6; later entry wins"
+    }
+  ]);
 });
