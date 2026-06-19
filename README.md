@@ -7,7 +7,9 @@
 [![Node >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](./package.json)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-Stop treating `.env.example` like decoration. Turn it into a tiny contract that catches missing, empty, misshaped, and drifting env values before CI or deploy breaks.
+Your deploy should not be a coin toss because one env var was blank.
+
+`safe-dotenv-check` turns `.env.example` into a tiny contract: required keys, optional docs, warning-only integrations, type checks, env-specific rules, and CI output that tells you exactly what to fix.
 
 ```bash
 npx safe-dotenv-check --example .env.example --env .env.production --env-name production
@@ -22,14 +24,25 @@ FAIL .env.production (production)
     - update DATABASE_URL to match type=url
 ```
 
-## Why Use It
+## Why Teams Use It
 
-- `.env.example` already exists in many repos, but it rarely proves the real env is usable.
-- Deploy failures from one missing key or blank value are boring, avoidable, and expensive.
-- Runtime config libraries are useful, but CI still needs a simple preflight check.
-- Real projects need nuance: required keys, optional docs, warning-only integrations, and production-only rules.
+- `.env.example` stops being a stale checklist and starts blocking broken config.
+- One missing key, blank value, or bad URL fails before deploy.
+- Optional docs and warning-only integrations keep adoption practical.
+- JSON output and GitHub summaries make it useful in CI, not just locally.
 
-`safe-dotenv-check` stays small: one CLI, one manifest file, plain text for humans, JSON for CI.
+Bootstrap the contract from a real env file, with common schema hints inferred:
+
+```bash
+npx safe-dotenv-check --init --env .env.local --out .env.example --preset nextjs
+```
+
+```dotenv
+DATABASE_URL= # type=url desc="Primary database connection"
+NEXT_PUBLIC_APP_URL= # type=url desc="Browser-exposed app URL"
+NODE_ENV= # enum=development|test|production
+PORT= # type=int
+```
 
 ## What It Checks
 
@@ -129,6 +142,8 @@ Output options:
 - `--show-descriptions`: include `desc=` text in reports
 - `--quiet`: in text mode, print only failing or warning reports
 - `--no-suggestions`: hide next-action hints
+- `--write-missing`: alias for `--sync-example --write`
+- `--annotate`: add source hints to generated or synced keys
 
 Extra key modes:
 
@@ -146,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.4.1
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.0
         with:
           example: .env.example
           env_files: |
@@ -174,11 +189,12 @@ See [docs/github-actions.md](./docs/github-actions.md) for a fuller setup.
 
 ## Starter Helpers
 
-Generate a redacted starter manifest from an existing local env file:
+Generate a redacted starter manifest from an existing local env file. Common schema directives are inferred from key names and values:
 
 ```bash
 safe-dotenv-check --init --env .env.local --out .env.example
 safe-dotenv-check --init --env .env.local --out .env.example --preset nextjs
+safe-dotenv-check --init --env .env.local --out .env.example --preset node --annotate
 ```
 
 Find keys that exist in a target env file but are missing from the manifest:
@@ -186,6 +202,7 @@ Find keys that exist in a target env file but are missing from the manifest:
 ```bash
 safe-dotenv-check --sync-example --example .env.example --env .env.local
 safe-dotenv-check --sync-example --example .env.example --env .env.local --write
+safe-dotenv-check --write-missing --annotate --example .env.example --env .env.local
 ```
 
 ## Examples

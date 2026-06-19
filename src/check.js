@@ -78,14 +78,21 @@ export function parseExampleFile(content) {
 
 export function generateExampleFromEnv(targetEntries, options = {}) {
   const presetEntries = getPresetEntries(options.preset);
-  const keys = new Set([...presetEntries, ...targetEntries.keys()]);
+  const keys = new Set([...presetEntries.map((entry) => entry.key), ...targetEntries.keys()]);
+  const presetByKey = new Map(presetEntries.map((entry) => [entry.key, entry]));
+
   return [...keys]
     .sort()
-    .map((key) => `${key}=`)
+    .map((key) => formatExampleLine(key, {
+      annotate: options.annotate,
+      source: options.source,
+      value: targetEntries.get(key) ?? "",
+      ...presetByKey.get(key)
+    }))
     .join("\n") + "\n";
 }
 
-export function syncExampleContent(exampleContent, targetEntries) {
+export function syncExampleContent(exampleContent, targetEntries, options = {}) {
   const example = parseExampleFile(exampleContent);
   const existingKeys = new Set(example.entries.map((entry) => entry.key));
   const missingKeys = [...targetEntries.keys()]
@@ -102,7 +109,13 @@ export function syncExampleContent(exampleContent, targetEntries) {
   const suffix = exampleContent.endsWith("\n") ? "" : "\n";
   return {
     added: missingKeys,
-    content: `${exampleContent}${suffix}${missingKeys.map((key) => `${key}=`).join("\n")}\n`
+    content: `${exampleContent}${suffix}${missingKeys
+      .map((key) => formatExampleLine(key, {
+        annotate: options.annotate,
+        source: options.source,
+        value: targetEntries.get(key) ?? ""
+      }))
+      .join("\n")}\n`
   };
 }
 
@@ -733,25 +746,98 @@ function getPresetEntries(preset = "") {
       return [];
     case "nextjs":
       return [
-        "DATABASE_URL",
-        "NEXT_PUBLIC_APP_URL",
-        "NEXT_PUBLIC_API_BASE_URL",
-        "NODE_ENV"
+        { key: "DATABASE_URL", rules: { type: "url" }, description: "Primary database connection" },
+        { key: "NEXT_PUBLIC_APP_URL", rules: { type: "url" }, description: "Browser-exposed app URL" },
+        { key: "NEXT_PUBLIC_API_BASE_URL", rules: { type: "url" }, description: "Browser-exposed API base URL" },
+        { key: "NODE_ENV", rules: { enum: ["development", "test", "production"] } }
       ];
     case "vite":
       return [
-        "VITE_API_BASE_URL",
-        "NODE_ENV"
+        { key: "VITE_API_BASE_URL", rules: { type: "url" }, description: "Browser-exposed API base URL" },
+        { key: "NODE_ENV", rules: { enum: ["development", "test", "production"] } }
       ];
     case "node":
       return [
-        "DATABASE_URL",
-        "NODE_ENV",
-        "PORT"
+        { key: "DATABASE_URL", rules: { type: "url" }, description: "Primary database connection" },
+        { key: "NODE_ENV", rules: { enum: ["development", "test", "production"] } },
+        { key: "PORT", rules: { type: "int" } }
       ];
     default:
       return [];
   }
+}
+
+function formatExampleLine(key, options = {}) {
+  const rules = {
+    ...inferRulesFromKey(key),
+    ...inferRulesFromValue(options.value ?? ""),
+    ...(options.rules ?? {})
+  };
+  const directives = [
+    ...formatRuleDirectives(rules),
+    ...(options.description ? [`desc="${escapeDescription(options.description)}"`] : []),
+    ...(options.annotate ? [`added-by=safe-dotenv-check`, ...(options.source ? [`source=${options.source}`] : [])] : [])
+  ];
+
+  return directives.length > 0
+    ? `${key}= # ${directives.join(" ")}`
+    : `${key}=`;
+}
+
+function inferRulesFromKey(key) {
+  if (key === "NODE_ENV") {
+    return { enum: ["development", "test", "production"] };
+  }
+
+  if (key === "PORT" || key.endsWith("_PORT")) {
+    return { type: "int" };
+  }
+
+  if (key === "URL" || key.endsWith("_URL") || key.endsWith("_URI")) {
+    return { type: "url" };
+  }
+
+  return {};
+}
+
+function inferRulesFromValue(value) {
+  if (!value) {
+    return {};
+  }
+
+  if (matchesType(value, "int")) {
+    return { type: "int" };
+  }
+
+  if (matchesType(value, "number")) {
+    return { type: "number" };
+  }
+
+  if (matchesType(value, "boolean")) {
+    return { type: "boolean" };
+  }
+
+  if (matchesType(value, "url")) {
+    return { type: "url" };
+  }
+
+  if ((value.startsWith("{") || value.startsWith("[")) && matchesType(value, "json")) {
+    return { type: "json" };
+  }
+
+  return {};
+}
+
+function formatRuleDirectives(rules = {}) {
+  return [
+    ...(rules.type ? [`type=${rules.type}`] : []),
+    ...(rules.enum ? [`enum=${rules.enum.join("|")}`] : []),
+    ...(rules.pattern ? [`pattern=${rules.pattern}`] : [])
+  ];
+}
+
+function escapeDescription(value) {
+  return value.replace(/"/g, "\\\"");
 }
 
 function matchesEnv(entryEnvs = [], envName = "") {

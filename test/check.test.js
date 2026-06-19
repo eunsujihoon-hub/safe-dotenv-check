@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compareEnv, lintExampleFile, parseEnvFile, parseExampleFile } from "../src/check.js";
+import { compareEnv, generateExampleFromEnv, lintExampleFile, parseEnvFile, parseExampleFile } from "../src/check.js";
 import { runCli } from "../src/cli.js";
 
 test("parseEnvFile ignores comments and export prefixes", () => {
@@ -367,6 +367,36 @@ SENTRY_DSN= # env=production desc=Production error tracking DSN
     envName: "production",
     ok: false
   });
+});
+
+test("generateExampleFromEnv infers common schema directives", () => {
+  const entries = parseEnvFile(`
+DATABASE_URL=postgres://localhost/app
+FEATURE_ENABLED=true
+FEATURE_FLAGS={"checkout":true}
+PORT=3000
+TIMEOUT_SECONDS=2.5
+API_KEY=secret
+`);
+
+  assert.equal(generateExampleFromEnv(entries), `API_KEY=
+DATABASE_URL= # type=url
+FEATURE_ENABLED= # type=boolean
+FEATURE_FLAGS= # type=json
+PORT= # type=int
+TIMEOUT_SECONDS= # type=number
+`);
+});
+
+test("generateExampleFromEnv adds framework preset hints", () => {
+  const entries = parseEnvFile("API_KEY=secret\n");
+
+  assert.equal(generateExampleFromEnv(entries, { preset: "nextjs" }), `API_KEY=
+DATABASE_URL= # type=url desc="Primary database connection"
+NEXT_PUBLIC_API_BASE_URL= # type=url desc="Browser-exposed API base URL"
+NEXT_PUBLIC_APP_URL= # type=url desc="Browser-exposed app URL"
+NODE_ENV= # enum=development|test|production
+`);
 });
 
 test("runCli supports json output", async () => {
@@ -844,7 +874,7 @@ test("runCli can initialize and sync example files", async () => {
 
   assert.equal(initExitCode, 0);
   assert.equal(stderr, "");
-  assert.equal(await fs.readFile(examplePath, "utf8"), "API_KEY=\nDATABASE_URL=\n");
+  assert.equal(await fs.readFile(examplePath, "utf8"), "API_KEY=\nDATABASE_URL= # type=url\n");
 
   await fs.writeFile(envPath, "DATABASE_URL=postgres://local\nAPI_KEY=secret\nNEW_KEY=value\n");
   stdout = "";
@@ -857,7 +887,36 @@ test("runCli can initialize and sync example files", async () => {
 
   assert.equal(syncExitCode, 0);
   assert.equal(stderr, "");
-  assert.equal(await fs.readFile(examplePath, "utf8"), "API_KEY=\nDATABASE_URL=\nNEW_KEY=\n");
+  assert.equal(await fs.readFile(examplePath, "utf8"), "API_KEY=\nDATABASE_URL= # type=url\nNEW_KEY=\n");
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli supports write-missing alias and annotations", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const envPath = path.join(tempDir, ".env.local");
+  const examplePath = path.join(tempDir, ".env.example");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(envPath, "API_KEY=secret\nAPP_URL=https://example.com\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--write-missing", "--annotate", "--example", examplePath, "--env", envPath],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(await fs.readFile(examplePath, "utf8"), `API_KEY=
+APP_URL= # type=url added-by=safe-dotenv-check source=${envPath}
+`);
 
   await fs.rm(tempDir, { recursive: true, force: true });
 });

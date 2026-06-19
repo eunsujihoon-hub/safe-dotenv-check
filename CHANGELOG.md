@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0 - 2026-06-19
+
+- infer common schema directives when `--init` creates a starter manifest from real env values
+- strengthen `--preset nextjs`, `--preset vite`, and `--preset node` with framework-aware URL, port, and `NODE_ENV` hints
+- add `--write-missing` as a shorter alias for `--sync-example --write`
+- add `--annotate` so generated and synced keys can include source hints
+- sharpen README onboarding around broken deploy prevention and one-command contract bootstrap
+
 ## 1.4.1 - 2026-06-15
 
 - reject missing values for option flags such as `--example`, `--env`, `--format`, `--extra`, `--preset`, and `--out` before file validation runs

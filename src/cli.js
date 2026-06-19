@@ -40,6 +40,8 @@ Options:
   --force               Allow --init to overwrite an existing output file
   --sync-example        Show keys from --env that are missing in --example
   --write               With --sync-example, append missing keys to --example
+  --write-missing       Alias for --sync-example --write
+  --annotate            Add source hints to generated or synced keys
   --doctor              Lint the manifest for confusing directives
   --help                Show this message
 
@@ -151,7 +153,11 @@ function runInit(parsed, stdout) {
   }
 
   const targetEntries = loadEnvFile(envPath);
-  const content = generateExampleFromEnv(targetEntries, { preset: parsed.preset });
+  const content = generateExampleFromEnv(targetEntries, {
+    annotate: parsed.annotate,
+    preset: parsed.preset,
+    source: envPath
+  });
   fs.writeFileSync(outputPath, content, "utf8");
   stdout.write(`created ${outputPath} from ${envPath}\n`);
   return 0;
@@ -161,7 +167,10 @@ function runSyncExample(parsed, stdout) {
   const envPath = parsed.envPaths[0];
   const exampleContent = fs.readFileSync(parsed.examplePath, "utf8");
   const targetEntries = loadEnvFile(envPath);
-  const result = syncExampleContent(exampleContent, targetEntries);
+  const result = syncExampleContent(exampleContent, targetEntries, {
+    annotate: parsed.annotate,
+    source: envPath
+  });
 
   if (result.added.length === 0) {
     stdout.write(`${parsed.examplePath} is already in sync with ${envPath}\n`);
@@ -219,6 +228,7 @@ function parseArgs(argv) {
   let syncExample = false;
   let doctor = false;
   let write = false;
+  let annotate = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -280,6 +290,17 @@ function parseArgs(argv) {
 
     if (arg === "--write") {
       write = true;
+      continue;
+    }
+
+    if (arg === "--write-missing") {
+      syncExample = true;
+      write = true;
+      continue;
+    }
+
+    if (arg === "--annotate") {
+      annotate = true;
       continue;
     }
 
@@ -385,6 +406,7 @@ function parseArgs(argv) {
 
       return validateExistingFiles({ envPaths }, {
         doctor,
+        annotate,
         envNames,
         envPaths,
         examplePath,
@@ -411,6 +433,7 @@ function parseArgs(argv) {
     if (doctor) {
       return validateExistingFiles({ examplePath }, {
         doctor,
+        annotate,
         envNames,
         envPaths,
         examplePath,
@@ -444,6 +467,7 @@ function parseArgs(argv) {
 
     return validateExistingFiles({ examplePath, envPaths }, {
       doctor,
+      annotate,
       envNames,
       envPaths,
       examplePath,
