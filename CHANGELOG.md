@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1 - 2026-06-22
+
+- keep key-based `--init` schema hints from being overwritten by misleading example values
+- avoid inferring numeric, boolean, or JSON schema rules from secret-like keys such as API keys, tokens, passwords, and private keys
+- make `--sync-example` preview output match the exact lines that `--write` would append
+- quote annotated source paths when needed so paths with spaces stay readable
+
 ## 1.5.0 - 2026-06-19
 
 - infer common schema directives when `--init` creates a starter manifest from real env values

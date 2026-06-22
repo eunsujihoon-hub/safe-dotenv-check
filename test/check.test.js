@@ -388,6 +388,25 @@ TIMEOUT_SECONDS= # type=number
 `);
 });
 
+test("generateExampleFromEnv keeps key-based rules ahead of misleading values", () => {
+  const entries = parseEnvFile(`
+DATABASE_URL=123
+PORT=https://example.com
+NODE_ENV=true
+API_KEY=123456
+AUTH_TOKEN=true
+PRIVATE_KEY={"kty":"RSA"}
+`);
+
+  assert.equal(generateExampleFromEnv(entries), `API_KEY=
+AUTH_TOKEN=
+DATABASE_URL= # type=url
+NODE_ENV= # enum=development|test|production
+PORT= # type=int
+PRIVATE_KEY=
+`);
+});
+
 test("generateExampleFromEnv adds framework preset hints", () => {
   const entries = parseEnvFile("API_KEY=secret\n");
 
@@ -892,6 +911,37 @@ test("runCli can initialize and sync example files", async () => {
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 
+test("runCli sync preview matches generated missing lines", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const envPath = path.join(tempDir, ".env.local");
+  const examplePath = path.join(tempDir, ".env.example");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(envPath, "API_KEY=secret\nAPP_URL=https://example.com\nFEATURE_ENABLED=true\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--sync-example", "--example", examplePath, "--env", envPath],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 1);
+  assert.equal(stderr, "");
+  assert.equal(stdout, `missing from ${examplePath}:
+  + APP_URL= # type=url
+  + FEATURE_ENABLED= # type=boolean
+run again with --write to append these keys
+`);
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
 test("runCli supports write-missing alias and annotations", async () => {
   const fs = await import("node:fs/promises");
   const os = await import("node:os");
@@ -916,6 +966,35 @@ test("runCli supports write-missing alias and annotations", async () => {
   assert.equal(stderr, "");
   assert.equal(await fs.readFile(examplePath, "utf8"), `API_KEY=
 APP_URL= # type=url added-by=safe-dotenv-check source=${envPath}
+`);
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli quotes annotation sources with spaces", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe dotenv check-"));
+  const envPath = path.join(tempDir, ".env local");
+  const examplePath = path.join(tempDir, ".env.example");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(envPath, "API_KEY=secret\nAPP_URL=https://example.com\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--write-missing", "--annotate", "--example", examplePath, "--env", envPath],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(await fs.readFile(examplePath, "utf8"), `API_KEY=
+APP_URL= # type=url added-by=safe-dotenv-check source="${envPath}"
 `);
 
   await fs.rm(tempDir, { recursive: true, force: true });

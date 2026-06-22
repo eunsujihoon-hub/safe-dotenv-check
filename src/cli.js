@@ -184,8 +184,8 @@ function runSyncExample(parsed, stdout) {
   }
 
   stdout.write(`missing from ${parsed.examplePath}:\n`);
-  for (const key of result.added) {
-    stdout.write(`  + ${key}=\n`);
+  for (const line of result.lines) {
+    stdout.write(`  + ${line}\n`);
   }
   stdout.write("run again with --write to append these keys\n");
   return 1;

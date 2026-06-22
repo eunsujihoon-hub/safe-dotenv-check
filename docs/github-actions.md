@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.0
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.1
         with:
           example: .env.example
           env_files: .env.ci
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.0
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.1
         with:
           example: .env.example
           env_files: |
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.0
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.1
         with:
           example: .env.example
           env_files: .env.production
@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.0
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.1
         with:
           example: .env.example
           env_files: .env.production

@@ -98,10 +98,16 @@ export function syncExampleContent(exampleContent, targetEntries, options = {}) 
   const missingKeys = [...targetEntries.keys()]
     .filter((key) => !existingKeys.has(key))
     .sort();
+  const missingLines = missingKeys.map((key) => formatExampleLine(key, {
+    annotate: options.annotate,
+    source: options.source,
+    value: targetEntries.get(key) ?? ""
+  }));
 
   if (missingKeys.length === 0) {
     return {
       added: [],
+      lines: [],
       content: exampleContent
     };
   }
@@ -109,13 +115,8 @@ export function syncExampleContent(exampleContent, targetEntries, options = {}) 
   const suffix = exampleContent.endsWith("\n") ? "" : "\n";
   return {
     added: missingKeys,
-    content: `${exampleContent}${suffix}${missingKeys
-      .map((key) => formatExampleLine(key, {
-        annotate: options.annotate,
-        source: options.source,
-        value: targetEntries.get(key) ?? ""
-      }))
-      .join("\n")}\n`
+    lines: missingLines,
+    content: `${exampleContent}${suffix}${missingLines.join("\n")}\n`
   };
 }
 
@@ -768,15 +769,20 @@ function getPresetEntries(preset = "") {
 }
 
 function formatExampleLine(key, options = {}) {
+  const keyRules = inferRulesFromKey(key);
+  const explicitRules = options.rules ?? {};
+  const valueRules = Object.keys(keyRules).length > 0 || Object.keys(explicitRules).length > 0
+    ? {}
+    : inferRulesFromValue(key, options.value ?? "");
   const rules = {
-    ...inferRulesFromKey(key),
-    ...inferRulesFromValue(options.value ?? ""),
-    ...(options.rules ?? {})
+    ...valueRules,
+    ...keyRules,
+    ...explicitRules
   };
   const directives = [
     ...formatRuleDirectives(rules),
     ...(options.description ? [`desc="${escapeDescription(options.description)}"`] : []),
-    ...(options.annotate ? [`added-by=safe-dotenv-check`, ...(options.source ? [`source=${options.source}`] : [])] : [])
+    ...(options.annotate ? [`added-by=safe-dotenv-check`, ...(options.source ? [`source=${formatDirectiveValue(options.source)}`] : [])] : [])
   ];
 
   return directives.length > 0
@@ -800,8 +806,12 @@ function inferRulesFromKey(key) {
   return {};
 }
 
-function inferRulesFromValue(value) {
+function inferRulesFromValue(key, value) {
   if (!value) {
+    return {};
+  }
+
+  if (isSensitiveKey(key)) {
     return {};
   }
 
@@ -838,6 +848,18 @@ function formatRuleDirectives(rules = {}) {
 
 function escapeDescription(value) {
   return value.replace(/"/g, "\\\"");
+}
+
+function formatDirectiveValue(value) {
+  if (/^[^\s"'\\]+$/.test(value)) {
+    return value;
+  }
+
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
+}
+
+function isSensitiveKey(key) {
+  return /(^|_)(?:API_)?(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PRIVATE|CREDENTIAL|CREDENTIALS)(?:_|$)/i.test(key);
 }
 
 function matchesEnv(entryEnvs = [], envName = "") {
