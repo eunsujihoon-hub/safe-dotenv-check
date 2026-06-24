@@ -36,11 +36,10 @@ export function parseExampleFile(content) {
     }
 
     const withoutExport = line.startsWith("export ") ? line.slice(7) : line;
-    const optionalPrefix = withoutExport.startsWith("?");
-    const warningPrefix = withoutExport.startsWith("!");
-    const normalizedLine = withoutExport
-      .replace(/^\?/, "")
-      .replace(/^!/, "");
+    const prefix = withoutExport.match(/^[?!]+/)?.[0] ?? "";
+    const optionalPrefix = prefix.includes("?");
+    const warningPrefix = prefix.includes("!");
+    const normalizedLine = withoutExport.replace(/^[?!]+/, "");
 
     const separatorIndex = normalizedLine.indexOf("=");
     const key = separatorIndex === -1
@@ -132,9 +131,10 @@ export function lintExampleFile(content) {
     }
 
     const withoutExport = line.startsWith("export ") ? line.slice(7) : line;
-    const normalizedLine = withoutExport
-      .replace(/^\?/, "")
-      .replace(/^!/, "");
+    const prefix = withoutExport.match(/^[?!]+/)?.[0] ?? "";
+    const optionalPrefix = prefix.includes("?");
+    const warningPrefix = prefix.includes("!");
+    const normalizedLine = withoutExport.replace(/^[?!]+/, "");
     const separatorIndex = normalizedLine.indexOf("=");
     const key = separatorIndex === -1
       ? normalizedLine.trim()
@@ -152,8 +152,18 @@ export function lintExampleFile(content) {
     const rawValue = separatorIndex === -1 ? "" : normalizedLine.slice(separatorIndex + 1).trim();
     const { comment } = splitValueAndComment(rawValue);
     const tokens = tokenizeDirectiveComment(comment);
+    const directiveState = parseManifestDirectives(comment);
     const envs = getEnvDirectiveValues(tokens);
     const duplicate = findOverlappingEntry(seenKeys.get(key) ?? [], envs);
+
+    if ((optionalPrefix || directiveState.optional) && (warningPrefix || directiveState.warning)) {
+      findings.push({
+        line: lineNumber,
+        key,
+        level: "warning",
+        message: "optional and warning tiers are both set; optional tier wins"
+      });
+    }
 
     if (duplicate) {
       findings.push({
@@ -200,6 +210,17 @@ export function lintExampleFile(content) {
             message: "enum directive has no values"
           });
         }
+      }
+    }
+
+    for (const token of tokens) {
+      if (shouldWarnUnknownDirectiveToken(token)) {
+        findings.push({
+          line: lineNumber,
+          key,
+          level: "warning",
+          message: `unknown directive: ${token}${suggestDirective(token)}`
+        });
       }
     }
 
@@ -681,7 +702,33 @@ function parseDescriptionFromTokens(tokens) {
 }
 
 function isKnownDirectiveToken(token) {
-  return /^(?:optional|warn(?:ing)?|type=|enum=|pattern=|env=)/i.test(token);
+  return /^(?:optional|warn(?:ing)?)$/i.test(token)
+    || /^(?:type|enum|pattern|env|desc|description|added-by|source)=/i.test(token);
+}
+
+function shouldWarnUnknownDirectiveToken(token) {
+  return /^[a-z][a-z0-9_-]*=/i.test(token) && !isKnownDirectiveToken(token);
+}
+
+function suggestDirective(token) {
+  const name = token.split("=")[0].toLowerCase();
+  const suggestions = {
+    des: "desc",
+    descr: "desc",
+    descs: "desc",
+    descc: "desc",
+    descriptionn: "description",
+    enm: "enum",
+    enums: "enum",
+    envs: "env",
+    patter: "pattern",
+    patterns: "pattern",
+    regex: "pattern",
+    typ: "type",
+    types: "type"
+  };
+  const suggestion = suggestions[name];
+  return suggestion ? ` (did you mean ${suggestion}=?)` : "";
 }
 
 function normalizeDescriptionValue(value) {
@@ -859,7 +906,12 @@ function formatDirectiveValue(value) {
 }
 
 function isSensitiveKey(key) {
-  return /(^|_)(?:API_)?(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PRIVATE|CREDENTIAL|CREDENTIALS)(?:_|$)/i.test(key);
+  const normalized = key.toUpperCase();
+  const compact = normalized.replace(/[^A-Z0-9]/g, "");
+
+  return /(^|_)(?:API_)?(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PRIVATE|CREDENTIAL|CREDENTIALS)(?:_|$)/i.test(key)
+    || /(?:APIKEY|SECRETKEY|ACCESSKEY|AUTHKEY|CLIENTKEY|PRIVATEKEY|PUBLICKEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|CREDENTIALS)$/.test(compact)
+    || /^(?:APIKEY|SECRETKEY|ACCESSKEY|AUTHKEY|CLIENTKEY|PRIVATEKEY|PUBLICKEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|CREDENTIALS)/.test(compact);
 }
 
 function matchesEnv(entryEnvs = [], envName = "") {

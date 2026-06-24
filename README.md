@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.1
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.2
         with:
           example: .env.example
           env_files: |

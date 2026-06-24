@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.2 - 2026-06-24
+
+- warn in `--doctor` when a manifest key mixes optional and warning-only tiers
+- warn in `--doctor` about unknown directive-like tokens, with suggestions for common typos
+- recognize `added-by=` and `source=` annotations as first-class manifest metadata
+- keep compact secret-like keys such as `OPENAI_APIKEY`, `CLIENT_SECRET`, `JWTSECRET`, and `ACCESSKEY` from getting value-based `--init` schema guesses
+
 ## 1.5.1 - 2026-06-22
 
 - keep key-based `--init` schema hints from being overwritten by misleading example values

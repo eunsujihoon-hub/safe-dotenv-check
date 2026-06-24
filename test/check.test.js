@@ -911,6 +911,25 @@ test("runCli can initialize and sync example files", async () => {
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 
+test("generateExampleFromEnv avoids value rules for compact secret-like keys", () => {
+  const content = generateExampleFromEnv(parseEnvFile(`
+OPENAI_APIKEY=123
+CLIENT_SECRET=true
+JWTSECRET={"alg":"HS256"}
+AUTH_TOKEN=false
+ACCESSKEY=42
+TURKEY_COUNT=2
+`));
+
+  assert.equal(content, `ACCESSKEY=
+AUTH_TOKEN=
+CLIENT_SECRET=
+JWTSECRET=
+OPENAI_APIKEY=
+TURKEY_COUNT= # type=int
+`);
+});
+
 test("runCli sync preview matches generated missing lines", async () => {
   const fs = await import("node:fs/promises");
   const os = await import("node:os");
@@ -1048,6 +1067,36 @@ SLACK_WEBHOOK_URL= # env=staging,production
       key: "SLACK_WEBHOOK_URL",
       level: "warning",
       message: "duplicate key overlaps with line 6; later entry wins"
+    }
+  ]);
+});
+
+test("lintExampleFile warns about ambiguous tiers and unknown directives", () => {
+  const result = lintExampleFile(`
+?SLACK_WEBHOOK_URL= # warn
+API_KEY= # typ=string descc="API key"
+APP_URL= # type=url added-by=safe-dotenv-check source=".env local"
+`);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.findings, [
+    {
+      line: 2,
+      key: "SLACK_WEBHOOK_URL",
+      level: "warning",
+      message: "optional and warning tiers are both set; optional tier wins"
+    },
+    {
+      line: 3,
+      key: "API_KEY",
+      level: "warning",
+      message: "unknown directive: typ=string (did you mean type=?)"
+    },
+    {
+      line: 3,
+      key: "API_KEY",
+      level: "warning",
+      message: "unknown directive: descc=\"API key\" (did you mean desc=?)"
     }
   ]);
 });
