@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.0 - 2026-07-02
+
+- add `--sync` as the clearer manifest coverage command while keeping `--sync-example` as an alias
+- let `--sync` compare one manifest against multiple env files in a single run
+- report stale manifest keys that no longer appear in any checked env file
+- support JSON output for `--sync` so CI can consume missing and stale coverage results
+- keep `--write` and `--write-missing` safe by only appending missing keys, never deleting stale entries
+- refresh README wording around day-to-day env drift checks and update Action examples to `v1.6.0`
+
 ## 1.5.2 - 2026-06-24
 
 - warn in `--doctor` when a manifest key mixes optional and warning-only tiers

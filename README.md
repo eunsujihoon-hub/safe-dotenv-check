@@ -7,9 +7,9 @@
 [![Node >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](./package.json)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-Your deploy should not be a coin toss because one env var was blank.
+`safe-dotenv-check` is a small CLI for keeping `.env.example` honest.
 
-`safe-dotenv-check` turns `.env.example` into a tiny contract: required keys, optional docs, warning-only integrations, type checks, env-specific rules, and CI output that tells you exactly what to fix.
+It checks real env files against the contract you meant to keep in the repo: required keys, optional notes, warning-only integrations, type rules, env-specific requirements, and CI output that points at the actual mismatch.
 
 ```bash
 npx safe-dotenv-check --example .env.example --env .env.production --env-name production
@@ -24,12 +24,12 @@ FAIL .env.production (production)
     - update DATABASE_URL to match type=url
 ```
 
-## Why Teams Use It
+## Why Use It
 
-- `.env.example` stops being a stale checklist and starts blocking broken config.
-- One missing key, blank value, or bad URL fails before deploy.
-- Optional docs and warning-only integrations keep adoption practical.
-- JSON output and GitHub summaries make it useful in CI, not just locally.
+- Catch missing, blank, or badly shaped values before a deploy job gets that far.
+- Keep `.env.example` useful instead of letting it drift away from `.env.local`, `.env.ci`, and production templates.
+- Mark noisy integrations as optional or warning-only while still documenting them.
+- Use the same checks locally, in CI, and in GitHub Action summaries.
 
 Bootstrap the contract from a real env file, with common schema hints inferred:
 
@@ -44,7 +44,7 @@ NODE_ENV= # enum=development|test|production
 PORT= # type=int
 ```
 
-Secret-like keys such as API keys, tokens, passwords, and private keys stay redacted without value-based type guesses.
+Secret-like keys such as API keys, tokens, passwords, and private keys stay redacted and do not get value-based type guesses.
 
 ## What It Checks
 
@@ -55,6 +55,7 @@ Secret-like keys such as API keys, tokens, passwords, and private keys stay reda
 - value shape with `type=`, `enum=`, and `pattern=`
 - env-specific contracts such as `env=production`
 - manifest mistakes and overlapping duplicate keys with `--doctor`
+- manifest drift across one or more env files with `--sync`
 
 ## Install
 
@@ -128,6 +129,7 @@ safe-dotenv-check --example .env.example --env .env.production --env-name produc
 safe-dotenv-check --example .env.example --env .env --extra warn
 safe-dotenv-check --example .env.example --env .env --format json --redact-values
 safe-dotenv-check --example .env.example --env .env --quiet
+safe-dotenv-check --sync --example .env.example --env .env.local --env .env.production
 safe-dotenv-check --doctor --example .env.example
 ```
 
@@ -144,7 +146,7 @@ Output options:
 - `--show-descriptions`: include `desc=` text in reports
 - `--quiet`: in text mode, print only failing or warning reports
 - `--no-suggestions`: hide next-action hints
-- `--write-missing`: alias for `--sync-example --write`
+- `--write-missing`: alias for `--sync --write`
 - `--annotate`: add source hints to generated or synced keys
 
 Extra key modes:
@@ -163,7 +165,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: eunsujihoon-hub/safe-dotenv-check@v1.5.2
+      - uses: eunsujihoon-hub/safe-dotenv-check@v1.6.0
         with:
           example: .env.example
           env_files: |
@@ -199,13 +201,16 @@ safe-dotenv-check --init --env .env.local --out .env.example --preset nextjs
 safe-dotenv-check --init --env .env.local --out .env.example --preset node --annotate
 ```
 
-Find keys that exist in a target env file but are missing from the manifest:
+Find env keys that are missing from the manifest, across one file or several:
 
 ```bash
-safe-dotenv-check --sync-example --example .env.example --env .env.local
-safe-dotenv-check --sync-example --example .env.example --env .env.local --write
+safe-dotenv-check --sync --example .env.example --env .env.local
+safe-dotenv-check --sync --example .env.example --env .env.local --env .env.production
+safe-dotenv-check --sync --example .env.example --env .env.local --write
 safe-dotenv-check --write-missing --annotate --example .env.example --env .env.local
 ```
+
+`--sync` also reports keys that are still in `.env.example` but no longer appear in any checked env file. It does not remove them for you; stale entries usually need a human look.
 
 ## Examples
 

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  analyzeExampleCoverage,
   compareEnv,
   generateExampleFromEnv,
   lintExampleFile,
@@ -20,6 +21,7 @@ Usage:
   safe-dotenv-check --example .env.example --env .env --extra warn
   safe-dotenv-check --example .env.example --env .env --format json --redact-values
   safe-dotenv-check --init --env .env.local --out .env.example
+  safe-dotenv-check --sync --example .env.example --env .env.local --env .env.production
   safe-dotenv-check --sync-example --example .env.example --env .env.local
   safe-dotenv-check --doctor --example .env.example
 
@@ -38,9 +40,10 @@ Options:
   --preset <name>       Init preset: none, nextjs, vite, or node
   --out <path>          Output path for --init, defaults to .env.example
   --force               Allow --init to overwrite an existing output file
-  --sync-example        Show keys from --env that are missing in --example
-  --write               With --sync-example, append missing keys to --example
-  --write-missing       Alias for --sync-example --write
+  --sync                Compare --example coverage across one or more --env files
+  --sync-example        Alias for --sync
+  --write               With --sync, append missing keys to --example
+  --write-missing       Alias for --sync --write
   --annotate            Add source hints to generated or synced keys
   --doctor              Lint the manifest for confusing directives
   --help                Show this message
@@ -164,21 +167,50 @@ function runInit(parsed, stdout) {
 }
 
 function runSyncExample(parsed, stdout) {
-  const envPath = parsed.envPaths[0];
   const exampleContent = fs.readFileSync(parsed.examplePath, "utf8");
-  const targetEntries = loadEnvFile(envPath);
+  const targetFiles = parsed.envPaths.map((envPath) => ({
+    file: envPath,
+    entries: loadEnvFile(envPath)
+  }));
+  const targetEntries = mergeTargetEntries(targetFiles);
+  const sourcesByKey = buildFirstSourceByKey(targetFiles);
+  const coverage = analyzeExampleCoverage(exampleContent, targetFiles);
   const result = syncExampleContent(exampleContent, targetEntries, {
     annotate: parsed.annotate,
-    source: envPath
+    sourcesByKey
   });
+  const wrote = parsed.write && result.added.length > 0;
 
-  if (result.added.length === 0) {
-    stdout.write(`${parsed.examplePath} is already in sync with ${envPath}\n`);
-    return 0;
+  if (wrote) {
+    fs.writeFileSync(parsed.examplePath, result.content, "utf8");
   }
 
-  if (parsed.write) {
-    fs.writeFileSync(parsed.examplePath, result.content, "utf8");
+  if (parsed.format === "json") {
+    stdout.write(`${JSON.stringify({
+      ok: coverage.ok,
+      example: parsed.examplePath,
+      files: coverage.files,
+      added: result.added,
+      staleInExample: coverage.staleInExample,
+      written: wrote
+    }, null, 2)}\n`);
+    return wrote || coverage.ok ? 0 : 1;
+  }
+
+  if (result.added.length === 0) {
+    if (coverage.staleInExample.length === 0) {
+      stdout.write(`${parsed.examplePath} is already in sync with ${formatEnvPathList(parsed.envPaths)}\n`);
+      return 0;
+    }
+
+    stdout.write(`stale in ${parsed.examplePath}:\n`);
+    for (const key of coverage.staleInExample) {
+      stdout.write(`  - ${key}\n`);
+    }
+    return 1;
+  }
+
+  if (wrote) {
     stdout.write(`updated ${parsed.examplePath}; added ${result.added.join(", ")}\n`);
     return 0;
   }
@@ -187,8 +219,46 @@ function runSyncExample(parsed, stdout) {
   for (const line of result.lines) {
     stdout.write(`  + ${line}\n`);
   }
+  if (coverage.staleInExample.length > 0) {
+    stdout.write(`stale in ${parsed.examplePath}:\n`);
+    for (const key of coverage.staleInExample) {
+      stdout.write(`  - ${key}\n`);
+    }
+  }
   stdout.write("run again with --write to append these keys\n");
   return 1;
+}
+
+function mergeTargetEntries(targetFiles) {
+  const merged = new Map();
+
+  for (const targetFile of targetFiles) {
+    for (const [key, value] of targetFile.entries) {
+      if (!merged.has(key)) {
+        merged.set(key, value);
+      }
+    }
+  }
+
+  return merged;
+}
+
+function buildFirstSourceByKey(targetFiles) {
+  const sources = new Map();
+
+  for (const targetFile of targetFiles) {
+    for (const key of targetFile.entries.keys()) {
+      if (!sources.has(key)) {
+        sources.set(key, targetFile.file);
+      }
+    }
+  }
+
+  return sources;
+}
+
+function formatEnvPathList(envPaths) {
+  return envPaths.length === 1 ? envPaths[0] : `${envPaths.length} env files`;
 }
 
 function runDoctor(parsed, stdout) {
@@ -278,7 +348,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (arg === "--sync-example") {
+    if (arg === "--sync" || arg === "--sync-example") {
       syncExample = true;
       continue;
     }
@@ -455,10 +525,6 @@ function parseArgs(argv) {
 
     if (envPaths.length === 0) {
       return { error: "at least one --env is required (or add a local .env)" };
-    }
-
-    if (syncExample && envPaths.length !== 1) {
-      return { error: "--sync-example requires exactly one --env file" };
     }
 
     if (envNames.length > 1 && envNames.length !== envPaths.length) {

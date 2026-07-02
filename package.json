@@ -1,6 +1,6 @@
 {
   "name": "safe-dotenv-check",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "description": "Validate .env files against .env.example with schema rules, env-specific checks, and CI-friendly output.",
   "type": "module",
   "homepage": "https://github.com/eunsujihoon-hub/safe-dotenv-check#readme",

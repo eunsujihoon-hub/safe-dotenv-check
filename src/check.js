@@ -99,7 +99,7 @@ export function syncExampleContent(exampleContent, targetEntries, options = {}) 
     .sort();
   const missingLines = missingKeys.map((key) => formatExampleLine(key, {
     annotate: options.annotate,
-    source: options.source,
+    source: options.sourcesByKey?.get(key) ?? options.source,
     value: targetEntries.get(key) ?? ""
   }));
 
@@ -116,6 +116,33 @@ export function syncExampleContent(exampleContent, targetEntries, options = {}) 
     added: missingKeys,
     lines: missingLines,
     content: `${exampleContent}${suffix}${missingLines.join("\n")}\n`
+  };
+}
+
+export function analyzeExampleCoverage(exampleContent, targetFiles) {
+  const example = parseExampleFile(exampleContent);
+  const exampleKeys = new Set(example.entries.map((entry) => entry.key));
+  const targetKeys = new Set();
+  const files = targetFiles.map((file) => {
+    for (const key of file.entries.keys()) {
+      targetKeys.add(key);
+    }
+
+    return {
+      file: file.file,
+      missingFromExample: [...file.entries.keys()]
+        .filter((key) => !exampleKeys.has(key))
+        .sort()
+    };
+  });
+  const staleInExample = [...exampleKeys]
+    .filter((key) => !targetKeys.has(key))
+    .sort();
+
+  return {
+    ok: files.every((file) => file.missingFromExample.length === 0) && staleInExample.length === 0,
+    files,
+    staleInExample
   };
 }
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compareEnv, generateExampleFromEnv, lintExampleFile, parseEnvFile, parseExampleFile } from "../src/check.js";
+import { analyzeExampleCoverage, compareEnv, generateExampleFromEnv, lintExampleFile, parseEnvFile, parseExampleFile } from "../src/check.js";
 import { runCli } from "../src/cli.js";
 
 test("parseEnvFile ignores comments and export prefixes", () => {
@@ -957,6 +957,155 @@ test("runCli sync preview matches generated missing lines", async () => {
   + FEATURE_ENABLED= # type=boolean
 run again with --write to append these keys
 `);
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("analyzeExampleCoverage reports missing and stale keys across env files", () => {
+  const result = analyzeExampleCoverage("API_KEY=\nOLD_KEY=\n", [
+    {
+      file: ".env.local",
+      entries: parseEnvFile("API_KEY=secret\nLOCAL_ONLY=1\n")
+    },
+    {
+      file: ".env.production",
+      entries: parseEnvFile("API_KEY=secret\nPRODUCTION_ONLY=1\n")
+    }
+  ]);
+
+  assert.deepEqual(result, {
+    ok: false,
+    files: [
+      {
+        file: ".env.local",
+        missingFromExample: ["LOCAL_ONLY"]
+      },
+      {
+        file: ".env.production",
+        missingFromExample: ["PRODUCTION_ONLY"]
+      }
+    ],
+    staleInExample: ["OLD_KEY"]
+  });
+});
+
+test("runCli sync supports multiple env files and json output", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const localEnvPath = path.join(tempDir, ".env.local");
+  const productionEnvPath = path.join(tempDir, ".env.production");
+  const examplePath = path.join(tempDir, ".env.example");
+
+  await fs.writeFile(examplePath, "API_KEY=\nOLD_KEY=\n");
+  await fs.writeFile(localEnvPath, "API_KEY=secret\nAPP_URL=http://localhost:3000\n");
+  await fs.writeFile(productionEnvPath, "API_KEY=secret\nDATABASE_URL=postgres://prod\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    [
+      "--sync",
+      "--example", examplePath,
+      "--env", localEnvPath,
+      "--env", productionEnvPath,
+      "--format", "json"
+    ],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 1);
+  assert.equal(stderr, "");
+  assert.deepEqual(JSON.parse(stdout), {
+    ok: false,
+    example: examplePath,
+    files: [
+      {
+        file: localEnvPath,
+        missingFromExample: ["APP_URL"]
+      },
+      {
+        file: productionEnvPath,
+        missingFromExample: ["DATABASE_URL"]
+      }
+    ],
+    added: ["APP_URL", "DATABASE_URL"],
+    staleInExample: ["OLD_KEY"],
+    written: false
+  });
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli sync writes before emitting json output", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const envPath = path.join(tempDir, ".env.local");
+  const examplePath = path.join(tempDir, ".env.example");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(envPath, "API_KEY=secret\nAPP_URL=http://localhost:3000\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    ["--sync", "--write", "--format", "json", "--example", examplePath, "--env", envPath],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(JSON.parse(stdout).written, true);
+  assert.equal(await fs.readFile(examplePath, "utf8"), `API_KEY=
+APP_URL= # type=url
+`.replace(/^\+/gm, ""));
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test("runCli sync writes merged missing keys with first source annotations", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safe-dotenv-check-"));
+  const localEnvPath = path.join(tempDir, ".env.local");
+  const productionEnvPath = path.join(tempDir, ".env.production");
+  const examplePath = path.join(tempDir, ".env.example");
+
+  await fs.writeFile(examplePath, "API_KEY=\n");
+  await fs.writeFile(localEnvPath, "API_KEY=secret\nAPP_URL=http://localhost:3000\n");
+  await fs.writeFile(productionEnvPath, "API_KEY=secret\nDATABASE_URL=postgres://prod\n");
+
+  let stdout = "";
+  let stderr = "";
+  const exitCode = runCli(
+    [
+      "--sync",
+      "--write",
+      "--annotate",
+      "--example", examplePath,
+      "--env", localEnvPath,
+      "--env", productionEnvPath
+    ],
+    { write(chunk) { stdout += chunk; } },
+    { write(chunk) { stderr += chunk; } }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+  assert.equal(stdout, `updated ${examplePath}; added APP_URL, DATABASE_URL\n`);
+  assert.equal(await fs.readFile(examplePath, "utf8"), `API_KEY=
+APP_URL= # type=url added-by=safe-dotenv-check source=${localEnvPath}
+DATABASE_URL= # type=url added-by=safe-dotenv-check source=${productionEnvPath}
+`.replace(/^\+/gm, ""));
 
   await fs.rm(tempDir, { recursive: true, force: true });
 });
